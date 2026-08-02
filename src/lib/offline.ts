@@ -110,9 +110,18 @@ export async function queueCount(): Promise<number> {
   return items.length;
 }
 
-/** Indique si le navigateur est en ligne */
+/** Indique si le navigateur / appareil est en ligne */
 export function isOnline(): boolean {
   return typeof navigator !== 'undefined' ? navigator.onLine : true;
+}
+
+/** Version async (utilise Capacitor Network sur mobile natif) */
+export async function isOnlineAsync(): Promise<boolean> {
+  try {
+    const { getNativeOnlineStatus, isNative } = await import('./mobile');
+    if (isNative) return getNativeOnlineStatus();
+  } catch { /* web */ }
+  return isOnline();
 }
 
 /**

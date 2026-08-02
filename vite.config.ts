@@ -4,6 +4,8 @@ import { fileURLToPath, URL } from 'node:url';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  // Chemins relatifs pour Capacitor (APK Android)
+  base: './',
   plugins: [react()],
   resolve: {
     alias: {
