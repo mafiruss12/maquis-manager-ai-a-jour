@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardCheck, Users, Building2,
   Beer, LogOut, Menu, X, UserCog, Calculator, BarChart3, Truck, UserCircle,
-  Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet,
+  Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/types';
@@ -52,8 +52,9 @@ const NAV_SECTIONS: NavSection[] = [
     label: 'Outils',
     items: [
       { to: '/ai', label: 'Assistant IA', icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'manager'] },
+      { to: '/chat', label: 'Chat interne', icon: <MessageCircle size={20} />, roles: ['super_admin', 'admin', 'manager'] },
       { to: '/notifications', label: 'Notifications', icon: <Bell size={20} />, roles: ['super_admin', 'admin', 'manager', 'cashier', 'employee'] },
-      { to: '/settings', label: 'Paramètres', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'manager'] },
+      { to: '/settings', label: 'Profil & Paramètres', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'manager', 'cashier', 'employee'] },
       { to: '/admin', label: 'Administration', icon: <UserCog size={20} />, roles: ['super_admin'] },
     ],
   },
@@ -64,6 +65,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useReactState(0);
+  const [estName, setEstName] = useReactState<string | null>(null);
+  const [estLogo, setEstLogo] = useReactState<string | null>(null);
 
   useEffect(() => {
     if (!member?.user_id) return;
@@ -74,6 +77,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         .eq('user_id', member.user_id)
         .eq('read', false);
       setUnreadNotifs(count ?? 0);
+
+      if (member.establishment_id) {
+        const { data } = await supabase
+          .from('establishments')
+          .select('name, logo_url')
+          .eq('id', member.establishment_id)
+          .maybeSingle();
+        if (data) {
+          setEstName(data.name);
+          setEstLogo((data as any).logo_url ?? null);
+        }
+      } else {
+        setEstName(null);
+        setEstLogo(null);
+      }
     })();
   }, [member]);
 
@@ -99,11 +117,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         }`}
       >
         <div className="flex items-center gap-2 px-5 py-4 border-b border-stone-800 shrink-0">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shrink-0">
-            <Beer size={20} className="text-white" />
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shrink-0 overflow-hidden">
+            {estLogo ? (
+              <img src={estLogo} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <Beer size={20} className="text-white" />
+            )}
           </div>
           <div className="min-w-0">
-            <p className="font-bold font-display text-stone-100 text-sm truncate">Maquis Manager</p>
+            <p className="font-bold font-display text-stone-100 text-sm truncate">
+              {estName || 'Maquis Manager'}
+            </p>
             <p className="text-xs text-stone-500 truncate">{member ? ROLE_LABELS[member.role] : ''}</p>
           </div>
         </div>
@@ -165,8 +189,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <Menu size={22} />
           </button>
           <div className="flex items-center gap-2">
-            <Beer size={20} className="text-primary-500" />
-            <span className="font-display font-bold text-stone-100">Maquis Manager</span>
+            {estLogo ? (
+              <img src={estLogo} alt="" className="w-6 h-6 rounded object-cover" />
+            ) : (
+              <Beer size={20} className="text-primary-500" />
+            )}
+            <span className="font-display font-bold text-stone-100">{estName || 'Maquis Manager'}</span>
           </div>
           <div className="w-6" />
         </header>

@@ -22,6 +22,7 @@ import Notifications from '@/pages/Notifications';
 import SettingsPage from '@/pages/Settings';
 import AIAssistant from '@/pages/AIAssistant';
 import CalendarPage from '@/pages/CalendarPage';
+import ChatPage from '@/pages/Chat';
 import AppLayout from '@/components/AppLayout';
 import { Loader2 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -93,6 +94,7 @@ function ProtectedRoutes() {
         <Route path="/daily-report" element={<DailyReportPage />} />
         <Route path="/cloture" element={<Navigate to="/daily-report" replace />} />
         <Route path="/ai" element={<AIAssistant />} />
+        <Route path="/chat" element={<ChatPage />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/admin" element={<SuperAdmin />} />
