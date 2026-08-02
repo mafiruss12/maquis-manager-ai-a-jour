@@ -379,37 +379,95 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
 
   async function submit() {
     if (!email || !password || !estId || !member) return;
+    if (password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères');
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
-      const { data, error: signUpError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-      if (signUpError) {
-        setError(signUpError.message);
+      // Sauvegarder la session admin (signUp bascule temporairement la session)
+      const { data: sessionData } = await supabase.auth.getSession();
+      const adminSession = sessionData.session;
+      if (!adminSession) {
+        setError('Session administrateur invalide. Reconnectez-vous.');
         setLoading(false);
         return;
       }
-      if (data.user) {
-        const { error: insertError } = await supabase.from('members').insert({
-          user_id: data.user.id,
-          email,
-          full_name: fullName,
-          role,
-          establishment_id: estId,
-          status: 'active',
+
+      // Créer le compte via signUp (fonctionne avec la clé anon)
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+        },
+      });
+
+      if (signUpError) {
+        setError(
+          signUpError.message.includes('already') || signUpError.message.includes('registered')
+            ? 'Cet email est déjà utilisé'
+            : signUpError.message
+        );
+        // Restaurer la session admin même en cas d'erreur
+        await supabase.auth.setSession({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
         });
-        if (insertError) {
-          setError(insertError.message);
-          setLoading(false);
-          return;
+        setLoading(false);
+        return;
+      }
+
+      // Restaurer immédiatement la session Super Admin
+      await supabase.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token,
+      });
+
+      if (data.user) {
+        // Upsert membre avec le rôle et l'établissement choisis
+        const { data: existing } = await supabase
+          .from('members')
+          .select('id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        if (existing) {
+          const { error: updateError } = await supabase
+            .from('members')
+            .update({
+              full_name: fullName || null,
+              role,
+              establishment_id: estId,
+              status: 'active',
+              email,
+            })
+            .eq('user_id', data.user.id);
+          if (updateError) {
+            setError(updateError.message);
+            setLoading(false);
+            return;
+          }
+        } else {
+          const { error: insertError } = await supabase.from('members').insert({
+            user_id: data.user.id,
+            email,
+            full_name: fullName || null,
+            role,
+            establishment_id: estId,
+            status: 'active',
+          });
+          if (insertError) {
+            setError(insertError.message);
+            setLoading(false);
+            return;
+          }
         }
       }
       onDone();
-    } catch {
-      setError('Une erreur est survenue');
+    } catch (e: any) {
+      setError(e?.message || 'Une erreur est survenue');
     } finally {
       setLoading(false);
     }
