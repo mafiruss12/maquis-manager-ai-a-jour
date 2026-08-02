@@ -1,7 +1,6 @@
-import { useState, useEffect } from 'react';
-import { Beer, Mail, Lock, User, Loader2, ArrowRight, Chrome } from 'lucide-react';
+import { useState } from 'react';
+import { Beer, Mail, Lock, User, Loader2, Chrome } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
 
 const MARQUEE_MESSAGES = [
   'Gérez votre maquis en temps réel',
@@ -20,19 +19,6 @@ export default function AuthPage() {
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [noAdminExists, setNoAdminExists] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      const { count } = await supabase
-        .from('members')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'super_admin');
-      setNoAdminExists((count ?? 0) === 0);
-      setCheckingAdmin(false);
-    })();
-  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,10 +39,6 @@ export default function AuthPage() {
         const { error: err } = await signUp(email, password, fullName);
         if (err) {
           setError(err);
-        } else {
-          setError(null);
-          setMode('signin');
-          alert('Compte créé ! Votre accès est en attente de validation par le Super Administrateur.');
         }
       }
     } finally {
@@ -67,8 +49,6 @@ export default function AuthPage() {
   async function handleGoogle() {
     await signInWithGoogle();
   }
-
-  const isInitialSetup = noAdminExists && mode === 'signup';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-amber-950/30 flex items-center justify-center p-4 relative overflow-hidden">
@@ -131,30 +111,6 @@ export default function AuthPage() {
             <p className="text-sm text-stone-400 mt-1">Gérez votre maquis en temps réel</p>
           </div>
 
-          {checkingAdmin ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="animate-spin text-primary-500" size={24} />
-            </div>
-          ) : isInitialSetup ? (
-            <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-4 mb-5">
-              <p className="text-sm text-primary-300 font-medium">
-                Aucun administrateur n'existe encore. Créez le compte Super Administrateur pour démarrer.
-              </p>
-            </div>
-          ) : noAdminExists && mode === 'signin' ? (
-            <div className="bg-secondary-500/10 border border-secondary-500/30 rounded-xl p-4 mb-5">
-              <p className="text-sm text-secondary-300">
-                Aucun administrateur n'existe encore. Créez le compte Super Administrateur pour démarrer.
-              </p>
-              <button
-                onClick={() => setMode('signup')}
-                className="mt-2 text-sm font-semibold text-secondary-400 hover:text-secondary-300 flex items-center gap-1"
-              >
-                Créer le Super Admin <ArrowRight size={14} />
-              </button>
-            </div>
-          ) : null}
-
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <div>
@@ -209,7 +165,7 @@ export default function AuthPage() {
 
             <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
               {loading ? <Loader2 className="animate-spin" size={18} /> : null}
-              {mode === 'signin' ? 'Se connecter' : isInitialSetup ? 'Créer le Super Admin' : 'Demander un accès'}
+              {mode === 'signin' ? 'Se connecter' : "S'inscrire"}
             </button>
           </form>
 
@@ -228,21 +184,18 @@ export default function AuthPage() {
             <Chrome size={18} /> Continuer avec Google
           </button>
 
-          {/* Basculer mode — masqué si configuration initiale */}
-          {!isInitialSetup && (
-            <p className="text-center text-sm text-stone-400 mt-5">
-              {mode === 'signin' ? "Nouveau membre ? " : 'Déjà un compte ? '}
-              <button
-                onClick={() => {
-                  setMode(mode === 'signin' ? 'signup' : 'signin');
-                  setError(null);
-                }}
-                className="font-semibold text-primary-400 hover:text-primary-300"
-              >
-                {mode === 'signin' ? 'Demander un accès' : 'Se connecter'}
-              </button>
-            </p>
-          )}
+          <p className="text-center text-sm text-stone-400 mt-5">
+            {mode === 'signin' ? "Nouveau membre ? " : 'Déjà un compte ? '}
+            <button
+              onClick={() => {
+                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setError(null);
+              }}
+              className="font-semibold text-primary-400 hover:text-primary-300"
+            >
+              {mode === 'signin' ? "S'inscrire" : 'Se connecter'}
+            </button>
+          </p>
         </div>
       </div>
     </div>

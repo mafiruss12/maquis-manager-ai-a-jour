@@ -41,21 +41,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    setMember(null);
+    // Aucun membre → création automatique (plus de validation / attente)
+    const email = currentUser.email ?? '';
+    const fullName =
+      (currentUser.user_metadata?.full_name as string) ||
+      (currentUser.user_metadata?.name as string) ||
+      email.split('@')[0] ||
+      'Utilisateur';
 
-    const { data: req } = await supabase
-      .from('access_requests')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
+    // Premier utilisateur = super_admin, les suivants = employee
+    const { count } = await supabase
+      .from('members')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', 'super_admin');
 
-    if (req && req.status === 'pending') {
-      setAccessRequest(req as AccessRequest);
-      setNeedsAccess(true);
+    const role = (count ?? 0) === 0 ? 'super_admin' : 'employee';
+
+    const { data: newMember, error } = await supabase
+      .from('members')
+      .insert({
+        user_id: currentUser.id,
+        email,
+        full_name: fullName,
+        role,
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (!error && newMember) {
+      setMember(newMember as Member);
     } else {
-      setAccessRequest(null);
-      setNeedsAccess(false);
+      setMember(null);
     }
+    setAccessRequest(null);
+    setNeedsAccess(false);
   }
 
   useEffect(() => {
@@ -98,28 +118,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: error.message };
 
     if (data.user) {
+      // Premier utilisateur = super_admin, les suivants = employee
       const { count } = await supabase
         .from('members')
         .select('*', { count: 'exact', head: true })
         .eq('role', 'super_admin');
 
-      if ((count ?? 0) === 0) {
-        await supabase.from('members').insert({
-          user_id: data.user.id,
-          email,
-          full_name: fullName,
-          role: 'super_admin',
-          status: 'active',
-        });
-      } else {
-        await supabase.from('access_requests').insert({
-          email,
-          full_name: fullName,
-          auth_provider: 'email',
-          user_id: data.user.id,
-          status: 'pending',
-        });
-      }
+      const role = (count ?? 0) === 0 ? 'super_admin' : 'employee';
+
+      await supabase.from('members').insert({
+        user_id: data.user.id,
+        email,
+        full_name: fullName,
+        role,
+        status: 'active',
+      });
     }
     return { error: null };
   }

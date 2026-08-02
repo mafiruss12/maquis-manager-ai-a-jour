@@ -37,7 +37,15 @@ function ProtectedRoutes() {
   }
 
   if (!user) return <AuthPage />;
-  if (needsAccess || !member) return <PendingAccessPage />;
+  // Plus de blocage d'accès : loadMemberData crée automatiquement le membre
+  if (needsAccess) return <PendingAccessPage />;
+  if (!member) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-stone-950">
+        <Loader2 className="animate-spin text-primary-500" size={32} />
+      </div>
+    );
+  }
 
   return (
     <AppLayout>
