@@ -24,9 +24,32 @@ import AIAssistant from '@/pages/AIAssistant';
 import CalendarPage from '@/pages/CalendarPage';
 import AppLayout from '@/components/AppLayout';
 import { Loader2 } from 'lucide-react';
+import { isSupabaseConfigured } from '@/lib/supabase';
+
+function ConfigError() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-stone-950 p-6">
+      <div className="max-w-md w-full bg-stone-900 border border-red-500/40 rounded-2xl p-6 text-center">
+        <h1 className="text-xl font-bold text-red-400 mb-3">Configuration manquante</h1>
+        <p className="text-stone-300 text-sm mb-4">
+          Les variables Supabase ne sont pas configurées sur Vercel.
+        </p>
+        <div className="text-left bg-stone-800 rounded-xl p-4 text-sm text-stone-300 space-y-2">
+          <p>1. Va dans Vercel → ton projet → <strong>Settings → Environment Variables</strong></p>
+          <p>2. Ajoute :</p>
+          <p className="font-mono text-xs text-amber-300">VITE_SUPABASE_URL</p>
+          <p className="font-mono text-xs text-amber-300">VITE_SUPABASE_ANON_KEY</p>
+          <p>3. Redeploie le site</p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ProtectedRoutes() {
   const { user, member, loading, needsAccess } = useAuth();
+
+  if (!isSupabaseConfigured) return <ConfigError />;
 
   if (loading) {
     return (
