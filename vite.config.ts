@@ -2,10 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { fileURLToPath, URL } from 'node:url';
 
-// https://vitejs.dev/config/
+// base '/' pour le web (Vercel). Pour Capacitor APK: VITE_BASE=./ npm run build
 export default defineConfig({
-  // Chemins relatifs pour Capacitor (APK Android)
-  base: './',
+  base: process.env.VITE_BASE || '/',
   plugins: [react()],
   resolve: {
     alias: {

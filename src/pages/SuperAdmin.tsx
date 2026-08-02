@@ -482,6 +482,12 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         }
       }
 
+      // Restaurer encore la session admin (signUp peut la réécraser via onAuthStateChange)
+      await supabase.auth.setSession({
+        access_token: adminSession.access_token,
+        refresh_token: adminSession.refresh_token,
+      });
+
       setCreated({ login: login.trim().includes('@') ? login.trim() : login.trim().toLowerCase(), password });
     } catch (e: any) {
       setError(e?.message || 'Une erreur est survenue');
@@ -512,8 +518,10 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
           {copied ? <><Check size={18} /> Copié !</> : <><Copy size={18} /> Copier identifiant + mot de passe</>}
         </button>
         <button
-          onClick={() => {
+          onClick={async () => {
+            // Recharge la page pour restaurer proprement la session Super Admin
             onDone();
+            window.location.href = '/admin';
           }}
           className="btn-primary w-full"
         >
