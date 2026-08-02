@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Beer, Mail, Lock, User, Loader2, Chrome } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
+import { toAuthEmail } from '@/lib/login';
 
 const MARQUEE_MESSAGES = [
   'Gérez votre maquis en temps réel',
@@ -25,10 +26,15 @@ export default function AuthPage() {
     setError(null);
     setLoading(true);
     try {
+      if (!email.trim()) {
+        setError('Identifiant requis');
+        setLoading(false);
+        return;
+      }
       if (mode === 'signin') {
         const { error: err } = await signIn(email, password);
         if (err) {
-          setError(err === 'Invalid login credentials' ? 'Email ou mot de passe incorrect' : err);
+          setError(err === 'Invalid login credentials' ? 'Identifiant ou mot de passe incorrect' : err);
         }
       } else {
         if (password.length < 6) {
@@ -36,7 +42,8 @@ export default function AuthPage() {
           setLoading(false);
           return;
         }
-        const { error: err } = await signUp(email, password, fullName);
+        // Accepte email OU simple login (gerant1 → gerant1@maquis.local)
+        const { error: err } = await signUp(toAuthEmail(email), password, fullName);
         if (err) {
           setError(err);
         }
@@ -129,18 +136,22 @@ export default function AuthPage() {
               </div>
             )}
             <div>
-              <label className="label">Email</label>
+              <label className="label">Identifiant ou email</label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
                 <input
-                  type="email"
+                  type="text"
                   required
+                  autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="vous@exemple.com"
+                  placeholder="ex: gerant1 ou vous@exemple.com"
                   className="input-field pl-10"
                 />
               </div>
+              <p className="text-xs text-stone-500 mt-1">
+                Vous pouvez utiliser un simple login (ex: caissier01) ou un email.
+              </p>
             </div>
             <div>
               <label className="label">Mot de passe</label>

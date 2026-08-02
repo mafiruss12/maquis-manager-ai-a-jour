@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
+import { toAuthEmail } from './login';
 import type { Member, AccessRequest } from './types';
 
 interface AuthContextValue {
@@ -108,12 +109,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  async function signIn(email: string, password: string) {
+  async function signIn(login: string, password: string) {
+    const email = toAuthEmail(login);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   }
 
-  async function signUp(email: string, password: string, fullName: string) {
+  async function signUp(login: string, password: string, fullName: string) {
+    const email = toAuthEmail(login);
     const { data, error } = await supabase.auth.signUp({ email, password });
     if (error) return { error: error.message };
 

@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
   UserCog, Building2, Users, Plus, Check, X, Loader2, Ban, KeyRound, Trash2, Clock, Mail,
+  RefreshCw, Copy, CheckCircle2,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Member, Establishment, AccessRequest, Role } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
 import { Modal, Badge, EmptyState } from '@/components/ui';
+import { toAuthEmail, displayLogin, generatePassword, generateLogin } from '@/lib/login';
 
 type Tab = 'requests' | 'members' | 'establishments';
 
@@ -221,7 +223,7 @@ export default function SuperAdmin() {
                         </Badge>
                       </div>
                       <p className="text-sm text-stone-400">
-                        {m.email} · {ROLE_LABELS[m.role]} · {est?.name ?? 'Aucun établissement'}
+                        {displayLogin(m.email)} · {ROLE_LABELS[m.role]} · {est?.name ?? 'Aucun établissement'}
                       </p>
                     </div>
                     {m.role !== 'super_admin' && (
@@ -369,16 +371,40 @@ export default function SuperAdmin() {
 
 function DirectAccessForm({ establishments, onDone }: { establishments: Establishment[]; onDone: () => void }) {
   const { member } = useAuth();
-  const [email, setEmail] = useState('');
+  const [login, setLogin] = useState('');
   const [fullName, setFullName] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState<Role>('employee');
+  const [password, setPassword] = useState(() => generatePassword());
+  const [role, setRole] = useState<Role>('manager');
   const [estId, setEstId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [created, setCreated] = useState<{ login: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  function autoGenerate() {
+    const newLogin = generateLogin(fullName || role, role);
+    const newPass = generatePassword();
+    setLogin(newLogin);
+    setPassword(newPass);
+  }
+
+  async function copyCredentials() {
+    if (!created) return;
+    const text = `Identifiant: ${created.login}\nMot de passe: ${created.password}`;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function submit() {
-    if (!email || !password || !estId || !member) return;
+    if (!login.trim() || !password || !estId || !member) {
+      setError('Identifiant, mot de passe et établissement sont obligatoires');
+      return;
+    }
     if (password.length < 6) {
       setError('Le mot de passe doit contenir au moins 6 caractères');
       return;
@@ -386,7 +412,8 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
     setLoading(true);
     setError(null);
     try {
-      // Sauvegarder la session admin (signUp bascule temporairement la session)
+      const authEmail = toAuthEmail(login);
+
       const { data: sessionData } = await supabase.auth.getSession();
       const adminSession = sessionData.session;
       if (!adminSession) {
@@ -395,22 +422,18 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         return;
       }
 
-      // Créer le compte via signUp (fonctionne avec la clé anon)
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
+        email: authEmail,
         password,
-        options: {
-          data: { full_name: fullName },
-        },
+        options: { data: { full_name: fullName, login: login.trim() } },
       });
 
       if (signUpError) {
         setError(
           signUpError.message.includes('already') || signUpError.message.includes('registered')
-            ? 'Cet email est déjà utilisé'
+            ? 'Cet identifiant est déjà utilisé'
             : signUpError.message
         );
-        // Restaurer la session admin même en cas d'erreur
         await supabase.auth.setSession({
           access_token: adminSession.access_token,
           refresh_token: adminSession.refresh_token,
@@ -419,31 +442,28 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         return;
       }
 
-      // Restaurer immédiatement la session Super Admin
       await supabase.auth.setSession({
         access_token: adminSession.access_token,
         refresh_token: adminSession.refresh_token,
       });
 
       if (data.user) {
-        // Upsert membre avec le rôle et l'établissement choisis
         const { data: existing } = await supabase
           .from('members')
           .select('id')
           .eq('user_id', data.user.id)
           .maybeSingle();
 
+        const payload = {
+          full_name: fullName || null,
+          role,
+          establishment_id: estId,
+          status: 'active' as const,
+          email: authEmail,
+        };
+
         if (existing) {
-          const { error: updateError } = await supabase
-            .from('members')
-            .update({
-              full_name: fullName || null,
-              role,
-              establishment_id: estId,
-              status: 'active',
-              email,
-            })
-            .eq('user_id', data.user.id);
+          const { error: updateError } = await supabase.from('members').update(payload).eq('user_id', data.user.id);
           if (updateError) {
             setError(updateError.message);
             setLoading(false);
@@ -452,11 +472,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
         } else {
           const { error: insertError } = await supabase.from('members').insert({
             user_id: data.user.id,
-            email,
-            full_name: fullName || null,
-            role,
-            establishment_id: estId,
-            status: 'active',
+            ...payload,
           });
           if (insertError) {
             setError(insertError.message);
@@ -465,7 +481,8 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
           }
         }
       }
-      onDone();
+
+      setCreated({ login: login.trim().includes('@') ? login.trim() : login.trim().toLowerCase(), password });
     } catch (e: any) {
       setError(e?.message || 'Une erreur est survenue');
     } finally {
@@ -473,40 +490,127 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
     }
   }
 
+  if (created) {
+    return (
+      <div className="space-y-4">
+        <div className="bg-success-500/10 border border-success-500/30 rounded-xl p-4 text-center">
+          <CheckCircle2 className="mx-auto text-success-400 mb-2" size={28} />
+          <p className="text-success-300 font-semibold">Compte créé avec succès</p>
+          <p className="text-sm text-stone-400 mt-1">Notez ou copiez ces identifiants pour les transmettre</p>
+        </div>
+        <div className="bg-stone-800 rounded-xl p-4 space-y-3">
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-wide">Identifiant</p>
+            <p className="text-lg font-mono font-bold text-primary-300">{created.login}</p>
+          </div>
+          <div>
+            <p className="text-xs text-stone-500 uppercase tracking-wide">Mot de passe</p>
+            <p className="text-lg font-mono font-bold text-amber-300">{created.password}</p>
+          </div>
+        </div>
+        <button onClick={copyCredentials} className="btn-secondary w-full flex items-center justify-center gap-2">
+          {copied ? <><Check size={18} /> Copié !</> : <><Copy size={18} /> Copier identifiant + mot de passe</>}
+        </button>
+        <button
+          onClick={() => {
+            onDone();
+          }}
+          className="btn-primary w-full"
+        >
+          Terminé
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-3">
-      {error && <div className="bg-error-500/10 border border-error-500/30 rounded-xl p-3 text-sm text-error-300">{error}</div>}
+      {error && (
+        <div className="bg-error-500/10 border border-error-500/30 rounded-xl p-3 text-sm text-error-300">{error}</div>
+      )}
+
+      <div className="bg-primary-500/10 border border-primary-500/20 rounded-xl p-3 text-xs text-primary-200">
+        Créez un <strong>login simple</strong> (ex: gerant01) ou un email. Un mot de passe est généré automatiquement.
+      </div>
+
       <div>
         <label className="label">Nom complet</label>
-        <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="input-field" placeholder="Jean Kouassi" />
+        <input
+          value={fullName}
+          onChange={(e) => setFullName(e.target.value)}
+          className="input-field"
+          placeholder="Jean Kouassi"
+        />
       </div>
+
       <div>
-        <label className="label">Email</label>
-        <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="input-field" placeholder="vous@exemple.com" />
+        <div className="flex items-center justify-between mb-1">
+          <label className="label mb-0">Identifiant (login)</label>
+          <button type="button" onClick={autoGenerate} className="text-xs text-primary-400 flex items-center gap-1 hover:text-primary-300">
+            <RefreshCw size={12} /> Générer login + mot de passe
+          </button>
+        </div>
+        <input
+          type="text"
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+          className="input-field font-mono"
+          placeholder="ex: gerant01 ou jean@gmail.com"
+          autoComplete="off"
+        />
+        <p className="text-xs text-stone-500 mt-1">
+          Pas besoin d&apos;email réel — un simple nom suffit.
+        </p>
       </div>
+
       <div>
-        <label className="label">Mot de passe temporaire</label>
-        <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="input-field" placeholder="••••••••" />
+        <div className="flex items-center justify-between mb-1">
+          <label className="label mb-0">Mot de passe</label>
+          <button
+            type="button"
+            onClick={() => setPassword(generatePassword())}
+            className="text-xs text-primary-400 flex items-center gap-1 hover:text-primary-300"
+          >
+            <RefreshCw size={12} /> Régénérer
+          </button>
+        </div>
+        <input
+          type="text"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="input-field font-mono"
+          placeholder="••••••••"
+          autoComplete="new-password"
+        />
       </div>
+
       <div>
         <label className="label">Rôle</label>
         <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
-          {(Object.keys(ROLE_LABELS) as Role[]).filter((r) => r !== 'super_admin').map((r) => (
-            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-          ))}
+          {(Object.keys(ROLE_LABELS) as Role[])
+            .filter((r) => r !== 'super_admin')
+            .map((r) => (
+              <option key={r} value={r}>
+                {ROLE_LABELS[r]}
+              </option>
+            ))}
         </select>
       </div>
+
       <div>
         <label className="label">Établissement</label>
         <select value={estId} onChange={(e) => setEstId(e.target.value)} className="input-field">
           <option value="">— Choisir —</option>
           {establishments.map((est) => (
-            <option key={est.id} value={est.id}>{est.name}</option>
+            <option key={est.id} value={est.id}>
+              {est.name}
+            </option>
           ))}
         </select>
       </div>
+
       <button onClick={submit} disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
-        {loading ? <Loader2 className="animate-spin" size={18} /> : <KeyRound size={18} />} Créer l'accès
+        {loading ? <Loader2 className="animate-spin" size={18} /> : <KeyRound size={18} />} Créer le compte
       </button>
     </div>
   );
