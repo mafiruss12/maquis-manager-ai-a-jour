@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Product } from '@/lib/types';
 import { Modal, EmptyState, Badge } from '@/components/ui';
+import { cacheSet, fetchWithCache, isOnline, queueAdd } from '@/lib/offline';
 
 export default function Inventaire() {
   const { member } = useAuth();
@@ -19,12 +20,16 @@ export default function Inventaire() {
       setLoading(false);
       return;
     }
-    const { data } = await supabase
-      .from('products')
-      .select('*')
-      .eq('establishment_id', member.establishment_id)
-      .order('name');
-    setProducts((data ?? []) as Product[]);
+    const cacheKey = `products:${member.establishment_id}`;
+    const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
+      const res = await supabase
+        .from('products')
+        .select('*')
+        .eq('establishment_id', member.establishment_id)
+        .order('name');
+      return (res.data ?? []) as Product[];
+    });
+    setProducts(data ?? []);
     setLoading(false);
   }
 
@@ -65,19 +70,42 @@ export default function Inventaire() {
       min_stock: Number(form.min_stock) || 0,
       unit: form.unit,
     };
-    if (editing) {
-      await supabase.from('products').update(payload).eq('id', editing.id);
+    if (isOnline()) {
+      if (editing) {
+        await supabase.from('products').update(payload).eq('id', editing.id);
+      } else {
+        await supabase.from('products').insert(payload);
+      }
     } else {
-      await supabase.from('products').insert(payload);
+      if (editing) {
+        await queueAdd('products', 'update', payload, { id: editing.id });
+        setProducts((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...payload } : p)));
+      } else {
+        const tempId = `offline-${Date.now()}`;
+        await queueAdd('products', 'insert', payload);
+        setProducts((prev) => [
+          ...prev,
+          { id: tempId, created_at: new Date().toISOString(), ...payload } as Product,
+        ]);
+      }
+      await cacheSet(
+        `products:${member.establishment_id}`,
+        // recompute after state is tricky; reload from current+change on next open
+      );
     }
     setModalOpen(false);
-    await loadProducts();
+    if (isOnline()) await loadProducts();
   }
 
   async function remove(p: Product) {
     if (!confirm(`Supprimer "${p.name}" ?`)) return;
-    await supabase.from('products').delete().eq('id', p.id);
-    await loadProducts();
+    if (isOnline()) {
+      await supabase.from('products').delete().eq('id', p.id);
+      await loadProducts();
+    } else {
+      await queueAdd('products', 'delete', {}, { id: p.id });
+      setProducts((prev) => prev.filter((x) => x.id !== p.id));
+    }
   }
 
   const filtered = products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()));

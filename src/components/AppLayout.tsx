@@ -10,6 +10,8 @@ import { ROLE_LABELS } from '@/lib/types';
 import type { Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState as useReactState } from 'react';
+import OfflineBanner from '@/components/OfflineBanner';
+import { displayLogin } from '@/lib/login';
 
 interface NavSection {
   label: string;
@@ -170,8 +172,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <Users size={16} className="text-stone-300" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-stone-200 truncate">{member?.full_name ?? member?.email}</p>
-              <p className="text-xs text-stone-500 truncate">{member?.email}</p>
+              <p className="text-sm font-medium text-stone-200 truncate">{member?.full_name ?? displayLogin(member?.email)}</p>
+              <p className="text-xs text-stone-500 truncate">{displayLogin(member?.email)}</p>
             </div>
           </div>
           <button
@@ -199,7 +201,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <div className="w-6" />
         </header>
 
-        <main className="flex-1 p-4 lg:p-8">{children}</main>
+        <main className="flex-1 p-4 lg:p-8 pb-24">{children}</main>
+        <OfflineBanner />
       </div>
 
       {sidebarOpen && (

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Product, PaymentMethod } from '@/lib/types';
 import { Modal, EmptyState } from '@/components/ui';
+import { cacheSet, fetchWithCache, isOnline, queueAdd } from '@/lib/offline';
 
 interface CartItem {
   product: Product;
@@ -27,12 +28,16 @@ export default function Caisse() {
         setLoading(false);
         return;
       }
-      const { data } = await supabase
-        .from('products')
-        .select('*')
-        .eq('establishment_id', member.establishment_id)
-        .order('name');
-      setProducts((data ?? []) as Product[]);
+      const cacheKey = `products:${member.establishment_id}`;
+      const { data } = await fetchWithCache<Product[]>(cacheKey, async () => {
+        const res = await supabase
+          .from('products')
+          .select('*')
+          .eq('establishment_id', member.establishment_id)
+          .order('name');
+        return (res.data ?? []) as Product[];
+      });
+      setProducts(data ?? []);
       setLoading(false);
     })();
   }, [member]);
@@ -66,8 +71,11 @@ export default function Caisse() {
     if (!member?.establishment_id || cart.length === 0) return;
     setProcessing(true);
     try {
+      const online = isOnline();
+      const updatedProducts = [...products];
+
       for (const item of cart) {
-        await supabase.from('sales').insert({
+        const salePayload = {
           establishment_id: member.establishment_id,
           product_id: item.product.id,
           qty: item.qty,
@@ -75,24 +83,33 @@ export default function Caisse() {
           total: item.product.price * item.qty,
           payment_method: paymentMethod,
           created_by: member.user_id,
-        });
-        await supabase
-          .from('products')
-          .update({ stock: Math.max(0, item.product.stock - item.qty) })
-          .eq('id', item.product.id);
+        };
+        const newStock = Math.max(0, item.product.stock - item.qty);
+
+        if (online) {
+          await supabase.from('sales').insert(salePayload);
+          await supabase.from('products').update({ stock: newStock }).eq('id', item.product.id);
+        } else {
+          // Hors ligne : file d'attente + mise à jour locale
+          await queueAdd('sales', 'insert', salePayload);
+          await queueAdd('products', 'update', { stock: newStock }, { id: item.product.id });
+        }
+
+        const idx = updatedProducts.findIndex((p) => p.id === item.product.id);
+        if (idx >= 0) {
+          updatedProducts[idx] = { ...updatedProducts[idx], stock: newStock };
+        }
       }
+
+      setProducts(updatedProducts);
+      await cacheSet(`products:${member.establishment_id}`, updatedProducts);
+
       setSuccess(true);
       setCart([]);
       setTimeout(() => {
         setSuccess(false);
         setCheckoutOpen(false);
       }, 2000);
-      const { data: refreshed } = await supabase
-        .from('products')
-        .select('*')
-        .eq('establishment_id', member.establishment_id)
-        .order('name');
-      setProducts((refreshed ?? []) as Product[]);
     } finally {
       setProcessing(false);
     }

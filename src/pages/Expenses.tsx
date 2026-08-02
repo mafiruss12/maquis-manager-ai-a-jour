@@ -6,6 +6,7 @@ import type { Expense, PaymentMethod } from '@/lib/types';
 import { EXPENSE_CATEGORIES } from '@/lib/types';
 import { formatFCFA, formatDate, todayISO } from '@/lib/format';
 import { Modal, EmptyState, StatCard } from '@/components/ui';
+import { cacheSet, fetchWithCache, isOnline, queueAdd } from '@/lib/offline';
 
 export default function Expenses() {
   const { member } = useAuth();
@@ -18,17 +19,23 @@ export default function Expenses() {
 
   async function load() {
     if (!member?.establishment_id) { setLoading(false); return; }
-    const { data } = await supabase.from('expenses').select('*').eq('establishment_id', member.establishment_id).order('created_at', { ascending: false }).limit(50);
-    setExpenses((data ?? []) as Expense[]);
+    const cacheKey = `expenses:${member.establishment_id}`;
+    const { data } = await fetchWithCache<Expense[]>(cacheKey, async () => {
+      const res = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('establishment_id', member.establishment_id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      return (res.data ?? []) as Expense[];
+    });
+    const list = data ?? [];
+    setExpenses(list);
 
     const today = todayISO();
     const monthStart = new Date(); monthStart.setDate(1);
-    const [todayRes, monthRes] = await Promise.all([
-      supabase.from('expenses').select('amount').eq('establishment_id', member.establishment_id).gte('created_at', today),
-      supabase.from('expenses').select('amount').eq('establishment_id', member.establishment_id).gte('created_at', monthStart.toISOString()),
-    ]);
-    setTodayTotal((todayRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0));
-    setMonthTotal((monthRes.data ?? []).reduce((s, e) => s + Number(e.amount), 0));
+    setTodayTotal(list.filter((e) => e.created_at >= today).reduce((s, e) => s + Number(e.amount), 0));
+    setMonthTotal(list.filter((e) => e.created_at >= monthStart.toISOString()).reduce((s, e) => s + Number(e.amount), 0));
     setLoading(false);
   }
 
@@ -36,7 +43,7 @@ export default function Expenses() {
 
   async function save() {
     if (!member?.establishment_id || !form.amount) return;
-    await supabase.from('expenses').insert({
+    const payload = {
       establishment_id: member.establishment_id,
       category: form.category,
       description: form.description || null,
@@ -44,16 +51,36 @@ export default function Expenses() {
       payment_method: form.payment_method as PaymentMethod,
       created_by: member.user_id,
       created_at: new Date(form.date).toISOString(),
-    });
+    };
+    if (isOnline()) {
+      await supabase.from('expenses').insert(payload);
+      await load();
+    } else {
+      await queueAdd('expenses', 'insert', payload);
+      const local: Expense = {
+        id: `offline-${Date.now()}`,
+        ...payload,
+        description: payload.description,
+      } as Expense;
+      const next = [local, ...expenses];
+      setExpenses(next);
+      await cacheSet(`expenses:${member.establishment_id}`, next);
+      setTodayTotal((t) => t + Number(form.amount));
+      setMonthTotal((t) => t + Number(form.amount));
+    }
     setModalOpen(false);
     setForm({ category: 'Achats', description: '', amount: '', payment_method: 'cash', date: todayISO() });
-    await load();
   }
 
   async function remove(e: Expense) {
     if (!confirm('Supprimer cette dépense ?')) return;
-    await supabase.from('expenses').delete().eq('id', e.id);
-    await load();
+    if (isOnline()) {
+      await supabase.from('expenses').delete().eq('id', e.id);
+      await load();
+    } else {
+      await queueAdd('expenses', 'delete', {}, { id: e.id });
+      setExpenses((prev) => prev.filter((x) => x.id !== e.id));
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400">Chargement...</div>;
