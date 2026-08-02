@@ -1,4 +1,4 @@
-export type Role = 'super_admin' | 'admin' | 'manager' | 'cashier' | 'employee';
+export type Role = 'super_admin' | 'admin' | 'owner' | 'manager' | 'cashier' | 'employee';
 
 export type MemberStatus = 'active' | 'suspended';
 
@@ -198,9 +198,20 @@ export interface Shift {
 export const ROLE_LABELS: Record<Role, string> = {
   super_admin: 'Super Administrateur',
   admin: 'Administrateur',
+  owner: 'Propriétaire',
   manager: 'Gérant',
   cashier: 'Caissier',
   employee: 'Employé',
+};
+
+/** Hiérarchie : plus le chiffre est bas, plus le rôle est élevé */
+export const ROLE_RANK: Record<Role, number> = {
+  super_admin: 0,
+  admin: 1,
+  owner: 2,
+  manager: 3,
+  cashier: 4,
+  employee: 5,
 };
 
 export const EXPENSE_CATEGORIES = [

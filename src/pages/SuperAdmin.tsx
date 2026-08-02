@@ -374,7 +374,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
   const [login, setLogin] = useState('');
   const [fullName, setFullName] = useState('');
   const [password, setPassword] = useState(() => generatePassword());
-  const [role, setRole] = useState<Role>('manager');
+  const [role, setRole] = useState<Role>('owner');
   const [estId, setEstId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -595,9 +595,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
       <div>
         <label className="label">Rôle</label>
         <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
-          {(Object.keys(ROLE_LABELS) as Role[])
-            .filter((r) => r !== 'super_admin')
-            .map((r) => (
+          {(['admin', 'owner', 'manager', 'cashier', 'employee'] as Role[]).map((r) => (
               <option key={r} value={r}>
                 {ROLE_LABELS[r]}
               </option>

@@ -24,7 +24,7 @@ export default function ChatPage() {
   const canChat =
     member?.establishment_id &&
     member &&
-    ['super_admin', 'admin', 'manager'].includes(member.role);
+    ['super_admin', 'admin', 'owner', 'manager'].includes(member.role);
 
   async function loadMessages() {
     if (!member?.establishment_id) {

@@ -3,6 +3,7 @@ import { Building2, User, Save, CheckCircle2, Camera, Plus } from 'lucide-react'
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import type { Establishment } from '@/lib/types';
+import { ROLE_LABELS } from '@/lib/types';
 
 export default function SettingsPage() {
   const { member, refresh } = useAuth();
@@ -14,7 +15,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
   const [error, setError] = useState<string | null>(null);
 
-  const canManageEst = member && ['super_admin', 'admin', 'manager'].includes(member.role);
+  const canManageEst = member && ['super_admin', 'admin', 'owner', 'manager'].includes(member.role);
 
   useEffect(() => {
     (async () => {
@@ -172,7 +173,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-stone-400">Rôle</span>
-              <span className="text-stone-200 capitalize">{member?.role?.replace('_', ' ')}</span>
+              <span className="text-stone-200">{member?.role ? ROLE_LABELS[member.role] : '—'}</span>
             </div>
             <button onClick={saveProfile} disabled={saving} className="btn-primary w-full flex items-center justify-center gap-2">
               {saved ? <><CheckCircle2 size={18} /> Enregistré !</> : <><Save size={18} /> Enregistrer le profil</>}
@@ -188,7 +189,7 @@ export default function SettingsPage() {
           </h2>
 
           {!est && !canManageEst && (
-            <p className="text-stone-400 text-sm">Aucun établissement rattaché. Contactez votre propriétaire ou gérant.</p>
+            <p className="text-stone-400 text-sm">Aucun établissement rattaché. Contactez votre administrateur ou propriétaire.</p>
           )}
 
           {(est || canManageEst) && (
