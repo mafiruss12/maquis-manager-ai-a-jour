@@ -39,7 +39,13 @@ export default function TeamPage() {
       .select('*')
       .eq('establishment_id', member.establishment_id)
       .order('created_at', { ascending: false });
-    setTeam((data ?? []) as Member[]);
+    // Uniquement le personnel d'équipe (créé par propriétaire / admin / gérant)
+    // Pas les super_admin, admin, ni le propriétaire lui-même
+    const staffRoles = new Set(['manager', 'cashier', 'employee']);
+    const filtered = ((data ?? []) as Member[]).filter(
+      (m) => staffRoles.has(m.role) && m.user_id !== member.user_id
+    );
+    setTeam(filtered);
     setLoading(false);
   }
 
@@ -102,7 +108,7 @@ export default function TeamPage() {
             <Users className="text-primary-400" /> Mon équipe
           </h1>
           <p className="text-stone-400 text-sm">
-            Créez des accès et attribuez les rôles pour faciliter le suivi avec votre gérant / personnel.
+            Uniquement les accès que vous créez (gérant, caissier, employé). Les comptes admin / propriétaire n’apparaissent pas ici.
           </p>
         </div>
         <button onClick={() => setModal(true)} className="btn-primary flex items-center gap-2">
