@@ -19,24 +19,23 @@ export default function ChatPage() {
   const [text, setText] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const canChat =
-    member?.establishment_id &&
-    member &&
-    ['super_admin', 'admin', 'owner', 'manager'].includes(member.role);
+  const canChat = Boolean(member?.establishment_id && member?.status === 'active');
 
   async function loadMessages() {
     if (!member?.establishment_id) {
       setLoading(false);
       return;
     }
-    const { data } = await supabase
+    const { data, error: err } = await supabase
       .from('chat_messages')
       .select('*')
       .eq('establishment_id', member.establishment_id)
       .order('created_at', { ascending: true })
       .limit(200);
+    if (err) setError(err.message);
     setMessages((data ?? []) as ChatMessage[]);
     setLoading(false);
     setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
@@ -57,7 +56,11 @@ export default function ChatPage() {
           filter: `establishment_id=eq.${member.establishment_id}`,
         },
         (payload) => {
-          setMessages((prev) => [...prev, payload.new as ChatMessage]);
+          const msg = payload.new as ChatMessage;
+          setMessages((prev) => {
+            if (prev.some((m) => m.id === msg.id)) return prev;
+            return [...prev, msg];
+          });
           setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 50);
         }
       )
@@ -68,16 +71,54 @@ export default function ChatPage() {
     };
   }, [member?.establishment_id]);
 
+  /** Notifie tous les autres membres actifs de l'établissement */
+  async function notifyTeam(messagePreview: string) {
+    if (!member?.establishment_id || !user) return;
+    const { data: teammates } = await supabase
+      .from('members')
+      .select('user_id')
+      .eq('establishment_id', member.establishment_id)
+      .eq('status', 'active')
+      .neq('user_id', user.id);
+
+    if (!teammates?.length) return;
+
+    const senderLabel = member.full_name ?? member.email ?? 'Un collègue';
+    const preview =
+      messagePreview.length > 80 ? messagePreview.slice(0, 80) + '…' : messagePreview;
+
+    const rows = teammates.map((t) => ({
+      user_id: t.user_id,
+      title: `Nouveau message de ${senderLabel}`,
+      message: preview,
+      read: false,
+      type: 'chat',
+      link: '/chat',
+      action_label: 'Ouvrir le chat',
+    }));
+
+    await supabase.from('notifications').insert(rows);
+  }
+
   async function send() {
     if (!text.trim() || !member?.establishment_id || !user) return;
     setSending(true);
-    await supabase.from('chat_messages').insert({
+    setError(null);
+    const body = text.trim();
+    const { error: err } = await supabase.from('chat_messages').insert({
       establishment_id: member.establishment_id,
       sender_id: user.id,
       sender_name: member.full_name ?? member.email,
-      message: text.trim(),
+      message: body,
     });
+    if (err) {
+      setError(err.message);
+      setSending(false);
+      return;
+    }
     setText('');
+    // Notifier les collègues (ne bloque pas l'UI)
+    notifyTeam(body).catch(() => {});
     setSending(false);
   }
 
@@ -103,8 +144,8 @@ export default function ChatPage() {
     return (
       <EmptyState
         icon={<MessageCircle size={48} />}
-        title="Chat réservé"
-        message="Le chat est réservé au propriétaire et au gérant de l'établissement."
+        title="Accès chat"
+        message="Votre compte doit être actif et rattaché à un établissement."
       />
     );
   }
@@ -116,13 +157,21 @@ export default function ChatPage() {
           <MessageCircle size={24} className="text-primary-400" /> Chat interne
         </h1>
         <p className="text-stone-400 text-sm">
-          Échanges privés entre propriétaire et gérant de votre établissement uniquement.
+          Échanges de votre établissement uniquement. Les destinataires sont notifiés.
         </p>
       </div>
 
+      {error && (
+        <div className="mb-3 rounded-xl border border-error-500/30 bg-error-500/10 px-3 py-2 text-sm text-error-300">
+          {error}
+        </div>
+      )}
+
       <div className="flex-1 card overflow-y-auto p-4 space-y-3 min-h-0">
         {messages.length === 0 && (
-          <p className="text-center text-stone-500 text-sm py-10">Aucun message. Commencez la conversation.</p>
+          <p className="text-center text-stone-500 text-sm py-10">
+            Aucun message. Commencez la conversation avec votre équipe.
+          </p>
         )}
         {messages.map((m) => {
           const mine = m.sender_id === user?.id;
@@ -134,7 +183,9 @@ export default function ChatPage() {
                 }`}
               >
                 {!mine && (
-                  <p className="text-xs font-semibold opacity-70 mb-0.5">{m.sender_name ?? 'Membre'}</p>
+                  <p className="text-xs font-semibold opacity-70 mb-0.5">
+                    {m.sender_name ?? 'Membre'}
+                  </p>
                 )}
                 <p className="text-sm whitespace-pre-wrap">{m.message}</p>
                 <p className={`text-[10px] mt-1 ${mine ? 'text-primary-200' : 'text-stone-500'}`}>
@@ -156,8 +207,13 @@ export default function ChatPage() {
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && send()}
-          placeholder="Écrire un message..."
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              send();
+            }
+          }}
+          placeholder="Écrire un message à l'équipe..."
           className="input-field flex-1"
         />
         <button

@@ -99,6 +99,9 @@ export interface Notification {
   message: string | null;
   read: boolean;
   created_at: string;
+  link?: string | null;
+  action_label?: string | null;
+  type?: string | null;
 }
 
 export interface AccessRequest {
