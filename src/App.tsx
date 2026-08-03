@@ -66,8 +66,16 @@ function ProtectedRoutes() {
   if (needsAccess) return <PendingAccessPage />;
   if (!member) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-stone-950">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-stone-950 gap-4 p-6 text-center">
         <Loader2 className="animate-spin text-primary-500" size={32} />
+        <p className="text-stone-400 text-sm">Préparation de votre espace…</p>
+        <button
+          type="button"
+          className="btn-secondary text-sm"
+          onClick={() => window.location.reload()}
+        >
+          Réessayer
+        </button>
       </div>
     );
   }

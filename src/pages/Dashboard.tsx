@@ -42,12 +42,16 @@ export default function Dashboard() {
   const theme = BUSINESS_THEMES[bizType];
 
   useEffect(() => {
+    let cancelled = false;
     (async () => {
       if (!member?.establishment_id) {
+        setData(null);
         setLoading(false);
         return;
       }
+      setLoading(true);
       const estId = member.establishment_id;
+      try {
       const today = todayISO();
 
       const [salesRes, expensesRes, productsRes, employeesRes, ordersRes, recentRes, tablesRes, weekSalesRes] =
@@ -90,23 +94,37 @@ export default function Dashboard() {
         revenue,
       }));
 
-      setData({
-        todaySales, todayExpenses, todayProfit: todaySales - todayExpenses, lowStockCount: lowStock,
-        employeeCount: employeesRes.data?.length ?? 0, activeOrders: ordersRes.data?.length ?? 0,
-        freeTables, occupiedTables, weeklyData, weekValues,
-        recentSales: (recentRes.data ?? []) as Sale[],
-        activeOrdersList: (ordersRes.data ?? []) as Order[],
-        topProducts,
-      });
-      setLoading(false);
+      if (!cancelled) {
+        setData({
+          todaySales, todayExpenses, todayProfit: todaySales - todayExpenses, lowStockCount: lowStock,
+          employeeCount: employeesRes.data?.length ?? 0, activeOrders: ordersRes.data?.length ?? 0,
+          freeTables, occupiedTables, weeklyData, weekValues,
+          recentSales: (recentRes.data ?? []) as Sale[],
+          activeOrdersList: (ordersRes.data ?? []) as Order[],
+          topProducts,
+        });
+      }
+      } catch (e) {
+        console.error('Dashboard load error', e);
+        if (!cancelled) {
+          setData({
+            todaySales: 0, todayExpenses: 0, todayProfit: 0, lowStockCount: 0,
+            employeeCount: 0, activeOrders: 0, freeTables: 0, occupiedTables: 0,
+            weeklyData: [], weekValues: [], recentSales: [], activeOrdersList: [], topProducts: [],
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
+    return () => { cancelled = true; };
   }, [member?.establishment_id]);
 
   if (loading) return <div className="flex items-center justify-center py-20 text-stone-400">Chargement...</div>;
   if (!member?.establishment_id) {
     return <EmptyState icon={<LayoutDashboard size={48} />} title="Aucun établissement" message="Créez votre activité dans Paramètres." />;
   }
-  if (!data) return null;
+  if (!data) return <div className="flex items-center justify-center py-20 text-stone-400">Chargement du tableau de bord…</div>;
 
   const shortcuts =
     bizType === 'restaurant' ? [

@@ -104,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function loadMemberData(currentUser: User) {
+    try {
     const { data: existingMember } = await supabase
       .from('members')
       .select('*')
@@ -152,6 +153,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAccessRequest(null);
     // Employé sans établissement = en attente d'affectation par l'admin
     setNeedsAccess(false);
+    } catch (e) {
+      console.error('loadMemberData', e);
+      setMember(null);
+      setMyEstablishments([]);
+      setActiveEstablishment(null);
+    }
   }
 
   useEffect(() => {
@@ -186,8 +193,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(login: string, password: string) {
     const email = toAuthEmail(login);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    setLoading(true);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
+    if (data.user) {
+      try {
+        await loadMemberData(data.user);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      setLoading(false);
+    }
+    return { error: null };
   }
 
   async function signUp(login: string, password: string, fullName: string) {
@@ -196,20 +217,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) return { error: error.message };
 
     if (data.user) {
-      // Premier utilisateur = super_admin, les suivants = employee
-      const { count } = await supabase
-        .from('members')
-        .select('*', { count: 'exact', head: true })
-        .eq('role', 'super_admin');
-
-      const role = (count ?? 0) === 0 ? 'super_admin' : 'employee';
-
+      // Toujours employé — promotion uniquement par super_admin / propriétaire
       await supabase.from('members').insert({
         user_id: data.user.id,
         email,
         full_name: fullName,
-        role,
+        role: 'employee',
         status: 'active',
+        establishment_id: null,
       });
     }
     return { error: null };
