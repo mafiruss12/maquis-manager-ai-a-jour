@@ -12,6 +12,15 @@ import { supabase } from '@/lib/supabase';
 import { useEffect, useState as useReactState } from 'react';
 import OfflineBanner from '@/components/OfflineBanner';
 import { displayLogin } from '@/lib/login';
+import TypePicker from '@/components/TypePicker';
+import {
+  applyBusinessTheme,
+  normalizeBusinessType,
+  MENU_BY_TYPE,
+  BUSINESS_LABELS,
+  BUSINESS_THEMES,
+  canManageEstablishments,
+} from '@/lib/businessTypes';
 
 interface NavSection {
   label: string;
@@ -63,12 +72,20 @@ const NAV_SECTIONS: NavSection[] = [
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
-  const { member, signOut } = useAuth();
+  const { member, signOut, myEstablishments, activeEstablishment, switchEstablishment, refresh } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [unreadNotifs, setUnreadNotifs] = useReactState(0);
   const [estName, setEstName] = useReactState<string | null>(null);
   const [estLogo, setEstLogo] = useReactState<string | null>(null);
+
+  const bizType = normalizeBusinessType(activeEstablishment?.type);
+  const theme = BUSINESS_THEMES[bizType];
+  const allowedRoutes = MENU_BY_TYPE[bizType];
+
+  useEffect(() => {
+    applyBusinessTheme(bizType);
+  }, [bizType]);
 
   useEffect(() => {
     if (!member?.user_id) return;
@@ -80,10 +97,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         .eq('read', false);
       setUnreadNotifs(count ?? 0);
 
-      if (member.establishment_id) {
+      if (activeEstablishment) {
+        setEstName(activeEstablishment.name);
+        setEstLogo(activeEstablishment.logo_url ?? null);
+      } else if (member.establishment_id) {
         const { data } = await supabase
           .from('establishments')
-          .select('name, logo_url')
+          .select('name, logo_url, type')
           .eq('id', member.establishment_id)
           .maybeSingle();
         if (data) {
@@ -95,7 +115,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         setEstLogo(null);
       }
     })();
-  }, [member]);
+  }, [member, activeEstablishment]);
 
   async function handleSignOut() {
     await signOut();
@@ -104,8 +124,37 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
     ...section,
-    items: section.items.filter((item) => member && item.roles.includes(member.role)),
+    items: section.items.filter(
+      (item) =>
+        member &&
+        item.roles.includes(member.role) &&
+        (item.to === '/admin' ||
+          member.role === 'super_admin' ||
+          allowedRoutes.includes(item.to))
+    ),
   })).filter((section) => section.items.length > 0);
+
+  if (member && !member.establishment_id && canManageEstablishments(member.role)) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100">
+        <TypePicker mode="create" onDone={() => refresh()} />
+      </div>
+    );
+  }
+
+  if (
+    member?.establishment_id &&
+    activeEstablishment &&
+    !['maquis', 'bar', 'restaurant', 'magasin'].includes(
+      (activeEstablishment.type || '').toLowerCase()
+    )
+  ) {
+    return (
+      <div className="min-h-screen bg-stone-950 text-stone-100">
+        <TypePicker mode="choose-type" onDone={() => refresh()} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-stone-950 flex">
@@ -166,6 +215,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
+        {myEstablishments.length > 0 && (
+          <div className="px-3 pb-2">
+            <label className="text-[10px] uppercase tracking-wide text-stone-500 px-1">Activité</label>
+            <select
+              className="input-field text-sm py-2 mt-1"
+              value={member?.establishment_id ?? ''}
+              onChange={async (e) => {
+                if (e.target.value) await switchEstablishment(e.target.value);
+              }}
+              style={{ borderColor: theme.primary + '55' }}
+            >
+              {myEstablishments.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name} ({BUSINESS_LABELS[normalizeBusinessType(e.type)]})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="p-3 border-t border-stone-800 shrink-0">
           <div className="flex items-center gap-2 px-3 py-2 mb-2">
             <div className="w-8 h-8 rounded-full bg-stone-700 flex items-center justify-center shrink-0">

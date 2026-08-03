@@ -112,6 +112,15 @@ export default function SettingsPage() {
           .from('members')
           .update({ establishment_id: newEst.id })
           .eq('id', member.id);
+        await supabase.from('member_establishments').upsert(
+          {
+            user_id: member.user_id,
+            establishment_id: newEst.id,
+            role: member.role === 'employee' ? 'owner' : member.role,
+            status: 'active',
+          },
+          { onConflict: 'user_id,establishment_id' }
+        );
         setEst(newEst as Establishment);
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
@@ -232,12 +241,11 @@ export default function SettingsPage() {
                   disabled={!canManageEst && !!est}
                 >
                   <option value="maquis">Maquis</option>
-                  <option value="restaurant">Restaurant</option>
                   <option value="bar">Bar</option>
-                  <option value="cave">Cave</option>
-                  <option value="hotel">Hôtel</option>
-                  <option value="autre">Autre</option>
+                  <option value="restaurant">Restaurant</option>
+                  <option value="magasin">Magasin</option>
                 </select>
+                <p className="text-xs text-stone-500 mt-1">Change le menu, le thème et le tableau de bord.</p>
               </div>
               <div>
                 <label className="label">Adresse</label>
@@ -267,6 +275,18 @@ export default function SettingsPage() {
                     <><Plus size={18} /> Créer mon établissement</>
                   )}
                 </button>
+                {canManageEst && est && (
+                  <button
+                    type="button"
+                    className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
+                    onClick={() => {
+                      setEst(null);
+                      setForm({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
+                    }}
+                  >
+                    <Plus size={18} /> Ajouter une autre activité
+                  </button>
+                )}
               )}
             </div>
           )}

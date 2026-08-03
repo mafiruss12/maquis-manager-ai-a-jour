@@ -14,6 +14,7 @@ export interface Establishment {
   phone: string | null;
   created_by: string | null;
   created_at: string;
+  logo_url?: string | null;
 }
 
 export interface Member {
