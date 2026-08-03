@@ -23,6 +23,7 @@ import SettingsPage from '@/pages/Settings';
 import AIAssistant from '@/pages/AIAssistant';
 import CalendarPage from '@/pages/CalendarPage';
 import ChatPage from '@/pages/Chat';
+import TeamPage from '@/pages/Team';
 import AppLayout from '@/components/AppLayout';
 import { Loader2 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -97,6 +98,7 @@ function ProtectedRoutes() {
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/team" element={<TeamPage />} />
         <Route path="/admin" element={<SuperAdmin />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>

@@ -594,6 +594,7 @@ function DirectAccessForm({ establishments, onDone }: { establishments: Establis
 
       <div>
         <label className="label">Rôle</label>
+        <p className="text-xs text-stone-500 mb-1">Super Admin → Admin → Propriétaire → Gérant → Caissier → Employé</p>
         <select value={role} onChange={(e) => setRole(e.target.value as Role)} className="input-field">
           {(['admin', 'owner', 'manager', 'cashier', 'employee'] as Role[]).map((r) => (
               <option key={r} value={r}>
