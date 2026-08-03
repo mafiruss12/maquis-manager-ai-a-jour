@@ -266,27 +266,29 @@ export default function SettingsPage() {
                 />
               </div>
               {canManageEst && (
-                <button onClick={saveEstablishment} disabled={saving || !form.name} className="btn-primary w-full flex items-center justify-center gap-2">
-                  {saved ? (
-                    <><CheckCircle2 size={18} /> Enregistré !</>
-                  ) : est ? (
-                    <><Save size={18} /> Enregistrer l'établissement</>
-                  ) : (
-                    <><Plus size={18} /> Créer mon établissement</>
-                  )}
-                </button>
-                {canManageEst && est && (
-                  <button
-                    type="button"
-                    className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
-                    onClick={() => {
-                      setEst(null);
-                      setForm({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
-                    }}
-                  >
-                    <Plus size={18} /> Ajouter une autre activité
+                <>
+                  <button onClick={saveEstablishment} disabled={saving || !form.name} className="btn-primary w-full flex items-center justify-center gap-2">
+                    {saved ? (
+                      <><CheckCircle2 size={18} /> Enregistré !</>
+                    ) : est ? (
+                      <><Save size={18} /> Enregistrer l'établissement</>
+                    ) : (
+                      <><Plus size={18} /> Créer mon établissement</>
+                    )}
                   </button>
-                )}
+                  {est && (
+                    <button
+                      type="button"
+                      className="btn-secondary w-full flex items-center justify-center gap-2 mt-2"
+                      onClick={() => {
+                        setEst(null);
+                        setForm({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
+                      }}
+                    >
+                      <Plus size={18} /> Ajouter une autre activité
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )}
