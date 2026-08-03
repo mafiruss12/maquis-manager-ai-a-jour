@@ -39,45 +39,60 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [activeEstablishment, setActiveEstablishment] = useState<MyEstablishment | null>(null);
 
   async function loadMyEstablishments(currentUser: User, currentMember: Member | null) {
-    const { data: links } = await supabase
-      .from('member_establishments')
-      .select('establishment_id, role, status')
-      .eq('user_id', currentUser.id)
-      .eq('status', 'active');
+    try {
+      const { data: links } = await supabase
+        .from('member_establishments')
+        .select('establishment_id, role, status')
+        .eq('user_id', currentUser.id)
+        .eq('status', 'active');
 
-    let estIds = (links ?? []).map((l) => l.establishment_id);
-    if (currentMember?.establishment_id && !estIds.includes(currentMember.establishment_id)) {
-      estIds = [...estIds, currentMember.establishment_id];
-    }
-
-    // Propriétaire / admin / super_admin : aussi les établissements créés
-    if (currentMember && ['super_admin', 'admin', 'owner'].includes(currentMember.role)) {
-      const { data: owned } = await supabase
-        .from('establishments')
-        .select('id')
-        .eq('created_by', currentUser.id);
-      for (const o of owned ?? []) {
-        if (!estIds.includes(o.id)) estIds.push(o.id);
+      let estIds = (links ?? []).map((l) => l.establishment_id);
+      if (currentMember?.establishment_id && !estIds.includes(currentMember.establishment_id)) {
+        estIds = [...estIds, currentMember.establishment_id];
       }
-    }
 
-    if (estIds.length === 0) {
+      if (currentMember && ['super_admin', 'admin', 'owner'].includes(currentMember.role)) {
+        const { data: owned } = await supabase
+          .from('establishments')
+          .select('id')
+          .eq('created_by', currentUser.id);
+        for (const o of owned ?? []) {
+          if (!estIds.includes(o.id)) estIds.push(o.id);
+        }
+      }
+
+      let list: MyEstablishment[] = [];
+      const roleMap = new Map((links ?? []).map((l) => [l.establishment_id, l.role]));
+
+      if (estIds.length > 0) {
+        const { data: ests } = await supabase.from('establishments').select('*').in('id', estIds);
+        list = (ests ?? []).map((e) => ({
+          ...(e as Establishment),
+          member_role: roleMap.get(e.id) ?? currentMember?.role,
+        }));
+      }
+
+      // Filet de sécurité : si le membre a un establishment_id mais la liste est vide (RLS)
+      if (list.length === 0 && currentMember?.establishment_id) {
+        const { data: one } = await supabase
+          .from('establishments')
+          .select('*')
+          .eq('id', currentMember.establishment_id)
+          .maybeSingle();
+        if (one) {
+          list = [{ ...(one as Establishment), member_role: currentMember.role }];
+        }
+      }
+
+      setMyEstablishments(list);
+      const active =
+        list.find((e) => e.id === currentMember?.establishment_id) ?? list[0] ?? null;
+      setActiveEstablishment(active);
+    } catch (e) {
+      console.error('loadMyEstablishments', e);
       setMyEstablishments([]);
       setActiveEstablishment(null);
-      return;
     }
-
-    const { data: ests } = await supabase.from('establishments').select('*').in('id', estIds);
-    const roleMap = new Map((links ?? []).map((l) => [l.establishment_id, l.role]));
-    const list: MyEstablishment[] = (ests ?? []).map((e) => ({
-      ...(e as Establishment),
-      member_role: roleMap.get(e.id) ?? currentMember?.role,
-    }));
-    setMyEstablishments(list);
-
-    const active =
-      list.find((e) => e.id === currentMember?.establishment_id) ?? list[0] ?? null;
-    setActiveEstablishment(active);
   }
 
   async function switchEstablishment(establishmentId: string) {
@@ -162,33 +177,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        loadMemberData(session.user).finally(() => setLoading(false));
-      } else {
-        setLoading(false);
-      }
-    });
+    let mounted = true;
 
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!mounted) return;
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.user) {
+          await loadMemberData(session.user);
+        }
+      } catch (e) {
+        console.error('getSession', e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
+      // Évite les doubles chargements inutiles au démarrage
+      if (event === 'INITIAL_SESSION') return;
+
       setSession(newSession);
       setUser(newSession?.user ?? null);
+
       if (newSession?.user) {
-        (async () => {
-          await loadMemberData(newSession.user);
-          setLoading(false);
-        })();
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+          // TOKEN_REFRESHED : ne bloque pas l'UI
+          const blockUi = event === 'SIGNED_IN';
+          if (blockUi) setLoading(true);
+          loadMemberData(newSession.user).finally(() => {
+            if (mounted && blockUi) setLoading(false);
+          });
+        }
       } else {
         setMember(null);
         setAccessRequest(null);
         setNeedsAccess(false);
+        setMyEstablishments([]);
+        setActiveEstablishment(null);
         setLoading(false);
       }
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   async function signIn(login: string, password: string) {
