@@ -118,7 +118,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Aucun membre → création automatique (plus de validation / attente)
+    // Nouveau compte → toujours employé sans établissement.
+    // Seul un super_admin peut promouvoir (Administration).
+    // (Le compte super_admin initial est créé une seule fois manuellement / déjà en base.)
     const email = currentUser.email ?? '';
     const fullName =
       (currentUser.user_metadata?.full_name as string) ||
@@ -126,22 +128,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       email.split('@')[0] ||
       'Utilisateur';
 
-    // Premier utilisateur = super_admin, les suivants = employee
-    const { count } = await supabase
-      .from('members')
-      .select('*', { count: 'exact', head: true })
-      .eq('role', 'super_admin');
-
-    const role = (count ?? 0) === 0 ? 'super_admin' : 'employee';
-
     const { data: newMember, error } = await supabase
       .from('members')
       .insert({
         user_id: currentUser.id,
         email,
         full_name: fullName,
-        role,
+        role: 'employee',
         status: 'active',
+        establishment_id: null,
       })
       .select()
       .single();
@@ -155,6 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setActiveEstablishment(null);
     }
     setAccessRequest(null);
+    // Employé sans établissement = en attente d'affectation par l'admin
     setNeedsAccess(false);
   }
 
