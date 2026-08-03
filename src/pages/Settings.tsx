@@ -15,7 +15,7 @@ export default function SettingsPage() {
   const [form, setForm] = useState({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
   const [error, setError] = useState<string | null>(null);
 
-  const canManageEst = member && ['super_admin', 'admin', 'owner', 'manager'].includes(member.role);
+  const canManageEst = member && ['super_admin', 'admin', 'owner'].includes(member.role);
 
   useEffect(() => {
     (async () => {
