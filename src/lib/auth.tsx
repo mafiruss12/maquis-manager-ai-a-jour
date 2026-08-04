@@ -120,11 +120,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadMemberData(currentUser: User) {
     try {
-    const { data: existingMember } = await supabase
+    let { data: existingMember } = await supabase
       .from('members')
       .select('*')
       .eq('user_id', currentUser.id)
       .maybeSingle();
+
+    // Auto-lier un établissement créé par cet utilisateur s'il n'en a pas
+    if (existingMember && !existingMember.establishment_id) {
+      const { data: owned } = await supabase
+        .from('establishments')
+        .select('id')
+        .eq('created_by', currentUser.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (owned?.id) {
+        await supabase
+          .from('members')
+          .update({ establishment_id: owned.id })
+          .eq('user_id', currentUser.id);
+        const { data: refreshed } = await supabase
+          .from('members')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+        if (refreshed) existingMember = refreshed;
+      }
+    }
 
     if (existingMember) {
       setMember(existingMember as Member);
@@ -134,9 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Nouveau compte → toujours employé sans établissement.
-    // Seul un super_admin peut promouvoir (Administration).
-    // (Le compte super_admin initial est créé une seule fois manuellement / déjà en base.)
+    // Nouveau compte → employé actif (accès app). Création d'établissement via TypePicker.
     const email = currentUser.email ?? '';
     const fullName =
       (currentUser.user_metadata?.full_name as string) ||
@@ -159,20 +180,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!error && newMember) {
       setMember(newMember as Member);
+      setAccessRequest(null);
+      setNeedsAccess(false);
       await loadMyEstablishments(currentUser, newMember as Member);
     } else {
-      setMember(null);
-      setMyEstablishments([]);
-      setActiveEstablishment(null);
+      // Insert échoué (doublon / RLS) → recharger
+      const { data: retry } = await supabase
+        .from('members')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      if (retry) {
+        setMember(retry as Member);
+        setNeedsAccess(false);
+        await loadMyEstablishments(currentUser, retry as Member);
+      } else {
+        console.error('member insert failed', error);
+        setMember(null);
+        setMyEstablishments([]);
+        setActiveEstablishment(null);
+      }
     }
     setAccessRequest(null);
-    // Employé sans établissement = en attente d'affectation par l'admin
     setNeedsAccess(false);
     } catch (e) {
       console.error('loadMemberData', e);
       setMember(null);
       setMyEstablishments([]);
       setActiveEstablishment(null);
+      setNeedsAccess(false);
     }
   }
 

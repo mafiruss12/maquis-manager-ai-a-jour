@@ -52,16 +52,38 @@ export default function TypePicker({ mode, onDone, defaultName = '' }: Props) {
           .single();
         if (e1 || !est) throw new Error(e1?.message || 'Création impossible');
 
-        await supabase
+        // Lier le membre à l'établissement (owner si employé sans établissement)
+        const nextRole = ['employee', 'cashier'].includes(member.role) ? 'owner' : member.role;
+        const { error: eMember } = await supabase
           .from('members')
-          .update({ establishment_id: est.id, role: member.role === 'employee' ? 'owner' : member.role })
+          .update({ establishment_id: est.id, role: nextRole })
           .eq('user_id', user.id);
+        // Si le trigger bloque le rôle, au moins lier l'établissement
+        if (eMember) {
+          await supabase
+            .from('members')
+            .update({ establishment_id: est.id })
+            .eq('user_id', user.id);
+        } else {
+          // Vérifier si le rôle a bien été appliqué
+          const { data: check } = await supabase
+            .from('members')
+            .select('role, establishment_id')
+            .eq('user_id', user.id)
+            .maybeSingle();
+          if (check && !check.establishment_id) {
+            await supabase
+              .from('members')
+              .update({ establishment_id: est.id })
+              .eq('user_id', user.id);
+          }
+        }
 
         await supabase.from('member_establishments').upsert(
           {
             user_id: user.id,
             establishment_id: est.id,
-            role: member.role === 'employee' ? 'owner' : member.role,
+            role: nextRole,
             status: 'active',
           },
           { onConflict: 'user_id,establishment_id' }

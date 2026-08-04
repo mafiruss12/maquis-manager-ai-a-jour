@@ -137,38 +137,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }),
   })).filter((section) => section.items.length > 0);
 
-  // Propriétaire / admin / super_admin sans établissement → création
-  if (member && !member.establishment_id && canManageEstablishments(member.role)) {
+  // Tout membre sans établissement peut créer le sien (plus de blocage "en attente")
+  if (member && !member.establishment_id) {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100">
         <TypePicker mode="create" onDone={() => refresh()} />
-      </div>
-    );
-  }
-
-  // Employé / caissier / gérant sans établissement → en attente d'affectation
-  if (member && !member.establishment_id && !canManageEstablishments(member.role)) {
-    return (
-      <div className="min-h-screen bg-stone-950 text-stone-100 flex items-center justify-center p-6">
-        <div className="max-w-md text-center space-y-4">
-          <div className="mx-auto w-16 h-16 rounded-2xl bg-amber-500/15 flex items-center justify-center">
-            <UserCog className="text-amber-400" size={28} />
-          </div>
-          <h1 className="text-xl font-bold text-stone-100">Compte en attente</h1>
-          <p className="text-stone-400 text-sm">
-            Votre compte <span className="text-stone-200">{member.email}</span> est créé avec le rôle
-            <span className="text-stone-200"> {ROLE_LABELS[member.role]}</span>.
-            Un administrateur doit vous affecter un établissement et un rôle dans
-            <strong className="text-stone-200"> Administration</strong>.
-          </p>
-          <button
-            type="button"
-            onClick={async () => { await signOut(); navigate('/auth'); }}
-            className="btn-secondary inline-flex items-center gap-2"
-          >
-            <LogOut size={16} /> Se déconnecter
-          </button>
-        </div>
       </div>
     );
   }
