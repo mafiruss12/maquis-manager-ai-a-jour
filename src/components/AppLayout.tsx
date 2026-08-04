@@ -2,7 +2,7 @@ import { type ReactNode, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardCheck, Users, Building2,
-  Beer, LogOut, Menu, X, UserCog, Calculator, BarChart3, Truck, UserCircle,
+  Beer, LogOut, Menu, X, UserCog, ClipboardList, Calculator, BarChart3, Truck, UserCircle,
   Calendar, UtensilsCrossed, Bell, Settings, Sparkles, Receipt, Wallet, MessageCircle,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
@@ -44,6 +44,7 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/tables', label: 'Tables', icon: <LayoutDashboard size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
       { to: '/employees', label: 'Employés', icon: <Users size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/team', label: 'Mon équipe (accès)', icon: <UserCog size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/suivi', label: 'Suivi gérant', icon: <ClipboardList size={20} />, roles: ['super_admin', 'admin', 'owner'] },
       { to: '/calendar', label: 'Planning', icon: <Calendar size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/customers', label: 'Clients', icon: <UserCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
     ],
