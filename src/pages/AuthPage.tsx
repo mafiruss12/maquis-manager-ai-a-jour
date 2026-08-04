@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Beer, Mail, Lock, User, Loader2, Chrome, KeyRound, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
@@ -41,6 +41,26 @@ export default function AuthPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Erreurs renvoyées par Google / OAuth dans l'URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const err =
+      params.get('error_description') ||
+      params.get('error') ||
+      hash.get('error_description') ||
+      hash.get('error');
+    if (err) {
+      setError(
+        err.includes('access_denied')
+          ? 'Connexion Google annulée.'
+          : `Connexion Google impossible : ${decodeURIComponent(err.replace(/\+/g, ' '))}`
+      );
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,9 +110,11 @@ export default function AuthPage() {
         setError('Nom complet requis');
         return;
       }
-      const { error: err } = await signUp(toAuthEmail(email), password, fullName);
+      const { error: err } = await signUp(email, password, fullName);
       if (err) setError(mapAuthError(err));
-      else setSuccess('Compte créé. Vous pouvez vous connecter.');
+      else {
+        setSuccess('Compte créé. Si vous n\'êtes pas redirigé, connectez-vous avec le même identifiant.');
+      }
     } finally {
       setLoading(false);
     }
@@ -268,10 +290,26 @@ export default function AuthPage() {
               </div>
               <button
                 type="button"
-                onClick={() => signInWithGoogle()}
-                className="w-full py-2.5 rounded-xl border border-stone-600 text-stone-200 text-sm flex items-center justify-center gap-2 hover:bg-stone-800"
+                disabled={googleLoading}
+                onClick={async () => {
+                  setError(null);
+                  setGoogleLoading(true);
+                  try {
+                    await signInWithGoogle();
+                    // Redirection Google en cours
+                  } catch (e: any) {
+                    setError(
+                      e?.message?.includes('provider')
+                        ? 'Google n\'est pas correctement configuré. Utilisez e-mail + mot de passe, ou contactez l\'admin.'
+                        : mapAuthError(e?.message || 'Connexion Google impossible')
+                    );
+                    setGoogleLoading(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl border border-stone-600 text-stone-200 text-sm flex items-center justify-center gap-2 hover:bg-stone-800 disabled:opacity-60"
               >
-                <Chrome size={16} /> Continuer avec Google
+                {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <Chrome size={16} />}
+                Continuer avec Google
               </button>
               <p className="text-center text-sm text-stone-400 mt-5">
                 {mode === 'signin' ? (

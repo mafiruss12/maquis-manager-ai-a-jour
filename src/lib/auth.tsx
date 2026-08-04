@@ -285,28 +285,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(login: string, password: string, fullName: string) {
     const email = toAuthEmail(login);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, name: fullName },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
 
     if (data.user) {
-      // Toujours employé — promotion uniquement par super_admin / propriétaire
-      await supabase.from('members').insert({
-        user_id: data.user.id,
-        email,
-        full_name: fullName,
-        role: 'employee',
-        status: 'active',
-        establishment_id: null,
-      });
+      // Profil membre (ignore doublon si déjà créé)
+      await supabase.from('members').upsert(
+        {
+          user_id: data.user.id,
+          email,
+          full_name: fullName,
+          role: 'employee',
+          status: 'active',
+          establishment_id: null,
+        },
+        { onConflict: 'user_id', ignoreDuplicates: true }
+      );
+
+      // Session immédiate (autoconfirm) → entrée dans l'app
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        try {
+          await loadMemberData(data.user);
+        } finally {
+          setLoading(false);
+        }
+        return { error: null };
+      }
+
+      // Pas de session (confirmation email requise)
+      setLoading(false);
+      return {
+        error: null,
+        // message géré côté UI
+      };
     }
+    setLoading(false);
     return { error: null };
   }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: `${window.location.origin}/`,
+        queryParams: { access_type: 'online', prompt: 'select_account' },
+      },
     });
+    if (error) {
+      throw error;
+    }
   }
 
   async function signOut() {
