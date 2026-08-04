@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Package, Plus, Pencil, Trash2, Search, AlertTriangle,
-  Sparkles, Download, Calculator,
+  Sparkles, Download, Calculator, Camera,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -47,6 +48,7 @@ function aiStatus(stock: number, min: number): { label: string; color: 'error' |
 }
 
 export default function Inventaire() {
+  const navigate = useNavigate();
   const { member } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
@@ -253,7 +255,10 @@ export default function Inventaire() {
           >
             <Download size={16} /> {seeding ? 'Import…' : 'Catalogue maquis'}
           </button>
-          <button onClick={openAdd} className="btn-primary flex items-center gap-2">
+          <button type="button" onClick={() => navigate('/inventory/scan')} className="btn-secondary flex items-center gap-2">
+          <Camera size={18} /> Scanner photo (IA)
+        </button>
+        <button onClick={openAdd} className="btn-primary flex items-center gap-2">
             <Plus size={18} /> Ajouter
           </button>
         </div>

@@ -5,6 +5,7 @@ import PendingAccessPage from '@/pages/PendingAccessPage';
 import Dashboard from '@/pages/Dashboard';
 import Caisse from '@/pages/Caisse';
 import Inventaire from '@/pages/Inventaire';
+import ScanInventaire from '@/pages/ScanInventaire';
 import DailyReportPage from '@/pages/DailyReport';
 import SuperAdmin from '@/pages/SuperAdmin';
 import Employees from '@/pages/Employees';
@@ -90,6 +91,7 @@ function ProtectedRoutes() {
         <Route path="/orders" element={<Orders />} />
         <Route path="/kitchen" element={<Kitchen />} />
         <Route path="/inventory" element={<Inventaire />} />
+        <Route path="/inventory/scan" element={<ScanInventaire />} />
         <Route path="/inventaire" element={<Navigate to="/inventory" replace />} />
         <Route path="/tables" element={<Tables />} />
         <Route path="/employees" element={<Employees />} />
