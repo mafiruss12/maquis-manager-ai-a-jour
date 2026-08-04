@@ -11,6 +11,7 @@ import type { Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
 import { useEffect, useState as useReactState } from 'react';
 import OfflineBanner from '@/components/OfflineBanner';
+import UpdateBanner from '@/components/UpdateBanner';
 import { displayLogin } from '@/lib/login';
 import TypePicker from '@/components/TypePicker';
 import {
@@ -282,7 +283,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 p-4 lg:p-8 pb-24">{children}</main>
-        <OfflineBanner />
+        <UpdateBanner />
+      <OfflineBanner />
       </div>
 
       {sidebarOpen && (

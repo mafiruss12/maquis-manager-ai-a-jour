@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { APP_VERSION, fetchLatestRelease, isNewerVersion } from '@/lib/appVersion';
 import type { Establishment } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
 
@@ -366,6 +367,34 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Version app */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-stone-100 mb-2">Application mobile</h2>
+          <p className="text-sm text-stone-400">Version installée (APK) : <span className="text-stone-200 font-mono">v{APP_VERSION}</span></p>
+          <p className="text-xs text-stone-500 mt-1">Les nouveautés du site s&apos;appliquent automatiquement. Une nouvelle APK n&apos;est nécessaire que pour l&apos;icône ou la coque Android.</p>
+          <button
+            type="button"
+            className="btn-secondary mt-3 text-sm"
+            onClick={async () => {
+              const latest = await fetchLatestRelease();
+              if (!latest) {
+                alert('Impossible de vérifier les mises à jour pour le moment.');
+                return;
+              }
+              if (isNewerVersion(latest.tag)) {
+                if (confirm(`Nouvelle version v${latest.tag} disponible. Télécharger ?`)) {
+                  window.open(latest.apkUrl || latest.htmlUrl, '_blank');
+                }
+              } else {
+                alert(`Vous êtes à jour (v${APP_VERSION}).`);
+              }
+            }}
+          >
+            Vérifier les mises à jour APK
+          </button>
+        </div>
+
       </div>
     </div>
   );
