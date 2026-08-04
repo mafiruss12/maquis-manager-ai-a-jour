@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Package, Plus, Pencil, Trash2, Search, AlertTriangle,
-  Sparkles, Download, Calculator, Camera,
+  Sparkles, Download, Calculator, Camera, Printer,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -221,6 +221,105 @@ export default function Inventaire() {
     }
   }
 
+
+  function printInventory(mode: 'stock' | 'blank' = 'blank') {
+    const estName = member?.establishment_id ? 'Établissement' : 'Maquis';
+    const dateStr = new Date().toLocaleDateString('fr-FR', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+    });
+    const rows = filtered.map((p, i) => {
+      const stock = Number(p.stock) || 0;
+      const casiers = (stock / CASIER).toFixed(2);
+      if (mode === 'blank') {
+        return `<tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(p.category || '')}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.unit || '')}</td>
+          <td class="num">${stock}</td>
+          <td class="blank">&nbsp;</td>
+          <td class="blank">&nbsp;</td>
+          <td class="blank">&nbsp;</td>
+          <td class="blank">&nbsp;</td>
+        </tr>`;
+      }
+      const val = stock * (Number(p.cost) || 0);
+      return `<tr>
+        <td>${i + 1}</td>
+        <td>${escapeHtml(p.category || '')}</td>
+        <td>${escapeHtml(p.name)}</td>
+        <td>${escapeHtml(p.unit || '')}</td>
+        <td class="num">${stock}</td>
+        <td class="num">${casiers}</td>
+        <td class="num">${Number(p.cost || 0).toLocaleString('fr-FR')}</td>
+        <td class="num">${Number(p.price || 0).toLocaleString('fr-FR')}</td>
+        <td class="num">${val.toLocaleString('fr-FR')}</td>
+      </tr>`;
+    }).join('');
+
+    const headersBlank = `
+      <th>N°</th><th>Catégorie</th><th>Produit</th><th>Format</th>
+      <th>Stock système</th><th>Comptage manuscrit</th><th>Écart</th>
+      <th>Prix achat</th><th>Observation</th>`;
+    const headersStock = `
+      <th>N°</th><th>Catégorie</th><th>Produit</th><th>Format</th>
+      <th>Qté</th><th>Casiers</th><th>P. achat</th><th>P. vente</th><th>Valeur</th>`;
+
+    const html = `<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"/>
+<title>Inventaire — ${dateStr}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; font-size: 11px; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  .meta { color: #444; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #333; padding: 5px 6px; text-align: left; }
+  th { background: #f0f0f0; font-size: 10px; text-transform: uppercase; }
+  td.num { text-align: right; }
+  td.blank { min-width: 70px; height: 22px; }
+  .foot { margin-top: 14px; font-size: 10px; color: #555; }
+  .sign { margin-top: 20px; display: flex; justify-content: space-between; }
+  .sign div { width: 30%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
+  @media print { .no-print { display: none; } }
+</style></head><body>
+  <h1>Inventaire physique — Maquis Manager</h1>
+  <div class="meta">${dateStr} · Mode : ${mode === 'blank' ? 'Feuille manuscrite (comptage)' : 'État du stock'}</div>
+  <table>
+    <thead><tr>${mode === 'blank' ? headersBlank : headersStock}</tr></thead>
+    <tbody>${rows || '<tr><td colspan="9">Aucun produit</td></tr>'}</tbody>
+  </table>
+  <div class="foot">
+    ${mode === 'blank'
+      ? 'Remplissez la colonne « Comptage manuscrit », calculez l’écart, puis scannez la feuille dans l’app (Inventaire → Scanner photo IA).'
+      : 'Document généré depuis Maquis Manager — valeur au coût d’achat.'}
+  </div>
+  <div class="sign">
+    <div>Gérant</div>
+    <div>Propriétaire</div>
+    <div>Date / cachet</div>
+  </div>
+  <script>window.onload = function(){ window.print(); }</script>
+</body></html>`;
+
+    const w = window.open('', '_blank', 'noopener,noreferrer');
+    if (!w) {
+      alert('Autorisez les pop-ups pour imprimer.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
+  function escapeHtml(s: string) {
+    return s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   if (loading) {
     return <div className="flex items-center justify-center py-20 text-stone-400">Chargement inventaire…</div>;
   }
@@ -255,10 +354,26 @@ export default function Inventaire() {
           >
             <Download size={16} /> {seeding ? 'Import…' : 'Catalogue maquis'}
           </button>
+          <button
+            type="button"
+            onClick={() => printInventory('blank')}
+            className="px-3 py-2 rounded-xl border border-stone-700 text-stone-300 text-sm hover:bg-stone-800 flex items-center gap-1.5"
+            title="Feuille à remplir à la main"
+          >
+            <Printer size={16} /> Imprimer (manuscrit)
+          </button>
+          <button
+            type="button"
+            onClick={() => printInventory('stock')}
+            className="px-3 py-2 rounded-xl border border-stone-700 text-stone-300 text-sm hover:bg-stone-800 flex items-center gap-1.5"
+            title="État actuel du stock"
+          >
+            <Printer size={16} /> Imprimer stock
+          </button>
           <button type="button" onClick={() => navigate('/inventory/scan')} className="btn-secondary flex items-center gap-2">
-          <Camera size={18} /> Scanner photo (IA)
-        </button>
-        <button onClick={openAdd} className="btn-primary flex items-center gap-2">
+            <Camera size={18} /> Scanner photo (IA)
+          </button>
+          <button onClick={openAdd} className="btn-primary flex items-center gap-2">
             <Plus size={18} /> Ajouter
           </button>
         </div>
