@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { toAuthEmail } from './login';
+import { isOnline, cacheAuthProfile, getCachedAuthProfile, prefetchForOffline } from './offline';
+import { getLoginLockRemaining, registerLoginFailure, registerLoginSuccess, isSafeLogin, safeErrorMessage } from './security';
 import type { Member, AccessRequest, Establishment } from './types';
 
 export interface MyEstablishment extends Establishment {
@@ -120,6 +122,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadMemberData(currentUser: User) {
     try {
+    if (!isOnline()) {
+      const cached = await getCachedAuthProfile(currentUser.id);
+      if (cached?.member) {
+        setMember(cached.member as Member);
+        setAccessRequest(null);
+        setNeedsAccess(false);
+        return;
+      }
+    }
     let { data: existingMember } = await supabase
       .from('members')
       .select('*')
@@ -154,6 +165,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAccessRequest(null);
       setNeedsAccess(false);
       await loadMyEstablishments(currentUser, existingMember as Member);
+      try {
+        await cacheAuthProfile({
+          userId: currentUser.id,
+          member: existingMember,
+        });
+        if (existingMember.establishment_id) {
+          await prefetchForOffline(existingMember.establishment_id, supabase);
+        }
+      } catch { /* offline cache optional */ }
       return;
     }
 
@@ -264,13 +284,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(login: string, password: string) {
+    const lockLeft = getLoginLockRemaining();
+    if (lockLeft > 0) {
+      return { error: `Trop de tentatives. Réessayez dans ${Math.ceil(lockLeft / 1000)} s.` };
+    }
+    if (!isSafeLogin(login)) {
+      return { error: 'Identifiant invalide.' };
+    }
     const email = toAuthEmail(login);
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      registerLoginFailure();
       setLoading(false);
-      return { error: error.message };
+      return { error: safeErrorMessage(error, 'Identifiants incorrects') };
     }
+    registerLoginSuccess();
     if (data.user) {
       try {
         await loadMemberData(data.user);
