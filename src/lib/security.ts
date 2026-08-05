@@ -60,7 +60,7 @@ export function isSafeLogin(login: string): boolean {
 }
 
 export function isStrongEnoughPassword(password: string): boolean {
-  return password.length >= 6;
+  return password.length >= 8;
 }
 
 export function escapeHtml(text: string): string {
