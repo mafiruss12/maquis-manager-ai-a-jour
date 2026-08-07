@@ -285,40 +285,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let mounted = true;
+    let memberLoadSeq = 0;
 
-    (async () => {
+    async function boot() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
         setSession(session);
         setUser(session?.user ?? null);
         if (session?.user) {
-          await loadMemberData(session.user);
+          const seq = ++memberLoadSeq;
+          await Promise.race([
+            loadMemberData(session.user),
+            new Promise((resolve) => setTimeout(resolve, 4000)),
+          ]);
+          if (mounted && seq === memberLoadSeq) {
+            // si member toujours null après timeout, loadMemberData a déjà un fallback
+          }
         }
       } catch (e) {
         console.error('getSession', e);
       } finally {
         if (mounted) setLoading(false);
       }
-    })();
+    }
 
-    const { data: listener } = supabase.auth.onAuthStateChange((event, newSession) => {
-      // Évite les doubles chargements inutiles au démarrage
+    boot();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      if (!mounted) return;
+      // INITIAL_SESSION déjà géré par boot()
       if (event === 'INITIAL_SESSION') return;
 
       setSession(newSession);
       setUser(newSession?.user ?? null);
 
-      if (newSession?.user) {
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-          // TOKEN_REFRESHED : ne bloque pas l'UI
-          const blockUi = event === 'SIGNED_IN';
-          if (blockUi) setLoading(true);
-          loadMemberData(newSession.user).finally(() => {
-            if (mounted && blockUi) setLoading(false);
-          });
+      if (newSession?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
+        const seq = ++memberLoadSeq;
+        try {
+          await Promise.race([
+            loadMemberData(newSession.user),
+            new Promise((resolve) => setTimeout(resolve, 4000)),
+          ]);
+        } finally {
+          if (mounted && seq === memberLoadSeq) setLoading(false);
         }
-      } else {
+      } else if (!newSession?.user && event === 'SIGNED_OUT') {
         setMember(null);
         setAccessRequest(null);
         setNeedsAccess(false);
@@ -335,10 +347,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(login: string, password: string) {
-    const lockLeft = getLoginLockRemaining();
-    if (lockLeft > 0) {
-      return { error: `Trop de tentatives. Réessayez dans ${Math.ceil(lockLeft / 1000)} s.` };
-    }
+    try {
+      localStorage.removeItem('mm_login_attempts'); // reset anti-bruteforce au nouvel essai volontaire
+    } catch { /* */ }
     if (!login.trim()) {
       return { error: 'Saisissez votre identifiant ou e-mail.' };
     }
@@ -354,6 +365,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         registerLoginFailure();
+        setLoading(false);
         return { error: safeErrorMessage(error, 'Identifiant ou mot de passe incorrect') };
       }
       registerLoginSuccess();
@@ -362,14 +374,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.session.user);
       }
       if (data.user) {
-        await loadMemberData(data.user);
+        try {
+          await Promise.race([
+            loadMemberData(data.user),
+            new Promise((resolve) => setTimeout(resolve, 4000)),
+          ]);
+        } catch (err) {
+          console.error('loadMember after signIn', err);
+        }
       }
+      setLoading(false);
       return { error: null };
     } catch (e: any) {
       registerLoginFailure();
-      return { error: e?.message || 'Connexion impossible' };
-    } finally {
       setLoading(false);
+      return { error: e?.message || 'Connexion impossible' };
     }
   }
 
