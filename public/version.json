@@ -1,1 +1,5 @@
-{"version":"1.2.1","notes":"Calendrier mois multi-commandes, clients WhatsApp/localisation, devis/caution/conflits."}
+{
+  "version": "1.2.3",
+  "notes": "Domaine unique https://maquis-mananger.vercel.app pour web et APK.",
+  "url": "https://maquis-mananger.vercel.app"
+}
