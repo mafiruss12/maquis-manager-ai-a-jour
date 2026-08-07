@@ -27,7 +27,7 @@ function mapAuthError(err: string): string {
     return 'Ce compte existe déjà. Connectez-vous ou réinitialisez le mot de passe.';
   }
   if (e.includes('password')) {
-    return 'Mot de passe trop court (minimum 6 caractères).';
+    return 'Mot de passe trop court (minimum 8 caractères).';
   }
   return err;
 }
@@ -102,7 +102,7 @@ export default function AuthPage() {
       }
 
       // signup
-      if (password.length < 6) {
+      if (password.length < 8) {
         setError('Le mot de passe doit contenir au moins 6 caractères');
         return;
       }
@@ -250,7 +250,7 @@ export default function AuthPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
                     className="input-field pl-10"
-                    minLength={6}
+                    minLength={8}
                   />
                 </div>
               </div>

@@ -55,7 +55,7 @@ export function registerLoginSuccess() {
 export function isSafeLogin(login: string): boolean {
   const v = login.trim();
   if (v.length < 2 || v.length > 80) return false;
-  if (v.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+  if (v.includes('@')) return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v);
   return /^[a-zA-Z0-9._-]{2,40}$/.test(v);
 }
 

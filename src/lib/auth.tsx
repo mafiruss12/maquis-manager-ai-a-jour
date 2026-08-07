@@ -288,81 +288,108 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (lockLeft > 0) {
       return { error: `Trop de tentatives. Réessayez dans ${Math.ceil(lockLeft / 1000)} s.` };
     }
+    if (!login.trim()) {
+      return { error: 'Saisissez votre identifiant ou e-mail.' };
+    }
+    if (!password) {
+      return { error: 'Saisissez votre mot de passe.' };
+    }
     if (!isSafeLogin(login)) {
-      return { error: 'Identifiant invalide.' };
+      return { error: 'Identifiant invalide (e-mail ou login simple sans espaces).' };
     }
     const email = toAuthEmail(login);
     setLoading(true);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      registerLoginFailure();
-      setLoading(false);
-      return { error: safeErrorMessage(error, 'Identifiants incorrects') };
-    }
-    registerLoginSuccess();
-    if (data.user) {
-      try {
-        await loadMemberData(data.user);
-      } finally {
-        setLoading(false);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        registerLoginFailure();
+        return { error: safeErrorMessage(error, 'Identifiant ou mot de passe incorrect') };
       }
-    } else {
+      registerLoginSuccess();
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.session.user);
+      }
+      if (data.user) {
+        await loadMemberData(data.user);
+      }
+      return { error: null };
+    } catch (e: any) {
+      registerLoginFailure();
+      return { error: e?.message || 'Connexion impossible' };
+    } finally {
       setLoading(false);
     }
-    return { error: null };
   }
 
   async function signUp(login: string, password: string, fullName: string) {
+    if (!isSafeLogin(login)) {
+      return { error: 'Identifiant invalide (2–40 caractères, lettres/chiffres, ou e-mail valide).' };
+    }
+    if (!password || password.length < 8) {
+      return { error: 'Mot de passe trop court (minimum 8 caractères).' };
+    }
     const email = toAuthEmail(login);
     setLoading(true);
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name: fullName, name: fullName },
-        emailRedirectTo: window.location.origin,
-      },
-    });
-    if (error) {
-      setLoading(false);
-      return { error: error.message };
-    }
-
-    if (data.user) {
-      // Profil membre (ignore doublon si déjà créé)
-      await supabase.from('members').upsert(
-        {
-          user_id: data.user.id,
-          email,
-          full_name: fullName,
-          role: 'owner',
-          status: 'active',
-          establishment_id: null,
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName || login, name: fullName || login },
+          emailRedirectTo: window.location.origin,
         },
-        { onConflict: 'user_id', ignoreDuplicates: true }
-      );
-
-      // Session immédiate (autoconfirm) → entrée dans l'app
-      if (data.session) {
-        setSession(data.session);
-        setUser(data.user);
-        try {
-          await loadMemberData(data.user);
-        } finally {
-          setLoading(false);
-        }
-        return { error: null };
+      });
+      if (error) {
+        return { error: safeErrorMessage(error, error.message) };
       }
 
-      // Pas de session (confirmation email requise)
+      // Si pas de session (confirmation e-mail / cas edge) → connexion immédiate
+      let session = data.session;
+      let user = data.user;
+      if (!session) {
+        const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (signInErr) {
+          // Compte créé mais connexion bloquée (ex. e-mail à confirmer)
+          return {
+            error:
+              signInErr.message.includes('Email not confirmed') || signInErr.message.includes('email')
+                ? 'Compte créé. Confirmez votre e-mail puis connectez-vous.'
+                : safeErrorMessage(signInErr, 'Compte créé. Connectez-vous avec le même identifiant.'),
+          };
+        }
+        session = signInData.session;
+        user = signInData.user;
+      }
+
+      if (session) {
+        setSession(session);
+        setUser(session.user);
+      }
+      if (user) {
+        // Créer / mettre à jour le profil propriétaire
+        await supabase.from('members').upsert(
+          {
+            user_id: user.id,
+            email: user.email || email,
+            full_name: fullName || user.user_metadata?.full_name || login,
+            role: 'owner',
+            status: 'active',
+            establishment_id: null,
+          },
+          { onConflict: 'user_id' }
+        );
+        await loadMemberData(user);
+      }
+      return { error: null };
+    } catch (e: any) {
+      return { error: e?.message || 'Inscription impossible' };
+    } finally {
       setLoading(false);
-      return {
-        error: null,
-        // message géré côté UI
-      };
     }
-    setLoading(false);
-    return { error: null };
   }
 
   async function signInWithGoogle() {
