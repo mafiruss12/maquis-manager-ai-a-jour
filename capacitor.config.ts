@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: 'Maquis Manager',
   webDir: 'dist',
   server: {
+    // APK charge toujours le site live (nouvelle adresse)
+    url: 'https://maquis-mananger.vercel.app',
+    cleartext: false,
     androidScheme: 'https',
     iosScheme: 'https',
   },
