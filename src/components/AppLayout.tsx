@@ -67,6 +67,14 @@ const NAV_SECTIONS: NavSection[] = [
       { to: '/chat', label: 'Chat interne', icon: <MessageCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/notifications', label: 'Notifications', icon: <Bell size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
       { to: '/settings', label: 'Profil & Paramètres', icon: <Settings size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier', 'employee'] },
+      { to: '/rent/equipment', label: 'Matériel', icon: <Package size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/rent/clients', label: 'Clients location', icon: <UserCircle size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
+      { to: '/rent/orders', label: 'Commandes location', icon: <Receipt size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager', 'cashier'] },
+      { to: '/rent/movements', label: 'Sorties & retours', icon: <Truck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/rent/payments', label: 'Paiements location', icon: <Wallet size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/rent/calendar', label: 'Calendrier location', icon: <Calendar size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/rent/packs', label: 'Packs événements', icon: <Sparkles size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
+      { to: '/rent/invoices', label: 'Factures location', icon: <ClipboardCheck size={20} />, roles: ['super_admin', 'admin', 'owner', 'manager'] },
       { to: '/admin', label: 'Administration', icon: <UserCog size={20} />, roles: ['super_admin'] },
     ],
   },
@@ -176,7 +184,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (
     member?.establishment_id &&
     activeEstablishment &&
-    !['maquis', 'bar', 'restaurant', 'magasin'].includes(
+    !['maquis', 'bar', 'restaurant', 'magasin', 'location_event'].includes(
       (activeEstablishment.type || '').toLowerCase()
     )
   ) {

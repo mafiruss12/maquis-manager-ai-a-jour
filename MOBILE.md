@@ -1,67 +1,107 @@
-# Maquis Manager — Application mobile (Android)
+# Maquis Manager — APK Android offline (sans Play Store)
 
-## Prérequis
+Application **open source** : code sur GitHub.  
+APK installable directement sur le téléphone (sources inconnues).
 
-- Node.js 18+
-- Android Studio (pour générer l’APK / AAB)
-- Compte [Google Play Console](https://play.google.com/console) (~25 $ une fois) pour publier
+## Ce que fait le mode offline
 
-## Générer l’APK (debug)
+| Situation | Comportement |
+|-----------|----------------|
+| Première ouverture **avec** Internet | Télécharge produits, session, écrans |
+| Coupure réseau | L’app **reste ouverte** (shell + données en cache) |
+| Caisse / Inventaire / Dépenses hors ligne | Enregistrés en local (IndexedDB) + file d’attente |
+| Retour Internet | Sync automatique vers Supabase (bannière « Hors ligne ») |
+
+> Il faut s’être connecté **au moins une fois en ligne** pour avoir les données en cache.
+
+## Prérequis sur un PC
+
+1. **Node.js 18+** — https://nodejs.org  
+2. **Android Studio** — https://developer.android.com/studio  
+   - Installe le SDK Android + un device/emulator optionnel  
+3. Java 17 (fourni souvent avec Android Studio)
+
+## Générer l’APK (debug) — 5 commandes
 
 ```bash
-# 1. Installer les dépendances
+git clone https://github.com/mafiruss12/maquis-manager-ai-a-jour.git
+cd maquis-manager-ai-a-jour
+
 npm install --legacy-peer-deps
 
-# 2. Build web + synchroniser Capacitor
-npm run build
-npx cap add android   # une seule fois
-npx cap sync android
+# Build web pour Capacitor (chemins relatifs)
+VITE_BASE=./ npm run build
 
-# 3. Ouvrir dans Android Studio
+# Créer le projet Android (une seule fois)
+npx cap add android
+
+# Copier le web dans Android
+npx cap sync android
+```
+
+### Option A — Android Studio (recommandé)
+
+```bash
 npx cap open android
 ```
 
-Dans Android Studio : **Build → Build Bundle(s) / APK(s) → Build APK(s)**
+Puis : **Build → Build Bundle(s) / APK(s) → Build APK(s)**  
 
-Ou en ligne de commande :
+Fichier produit :
+`android/app/build/outputs/apk/debug/app-debug.apk`
+
+### Option B — Ligne de commande
 
 ```bash
-cd android && ./gradlew assembleDebug
-# APK : android/app/build/outputs/apk/debug/app-debug.apk
+cd android
+./gradlew assembleDebug
+# APK : app/build/outputs/apk/debug/app-debug.apk
 ```
+
+## Installer sur le téléphone (sans Play Store)
+
+1. Envoie le fichier `app-debug.apk` (WhatsApp, Drive, USB…)  
+2. Sur Android : **Paramètres → Sécurité → Installer des apps inconnues** (autorise Chrome/Fichiers)  
+3. Ouvre le `.apk` → **Installer**  
+4. Ouvre **Maquis Manager** → connecte-toi **une fois avec Internet**  
+5. Tu peux ensuite travailler hors ligne (caisse, stock, dépenses)
 
 ## APK de production (signature)
 
+Pour une APK signée (plus stable, mises à jour) :
+
+1. Android Studio → **Build → Generate Signed Bundle / APK**  
+2. Crée un **keystore** (garde le mot de passe en lieu sûr)  
+3. Génère **APK release**
+
+Ou :
 ```bash
 cd android && ./gradlew assembleRelease
 ```
 
-Il faut un keystore de signature (Android Studio → Generate Signed Bundle / APK).
+## Identité de l’app
 
-## Publication Play Store
+- **App ID** : `com.maquismanager.app`  
+- **Nom** : Maquis Manager  
+- Config : `capacitor.config.ts`
 
-1. Créer une app sur Google Play Console  
-2. Uploader un **AAB** : `./gradlew bundleRelease`  
-3. Remplir fiche store, captures d’écran, politique de confidentialité  
-
-## iOS (App Store)
-
-Nécessite un **Mac** + compte Apple Developer (99 $/an) :
+## Scripts npm utiles
 
 ```bash
-npx cap add ios
-npx cap sync ios
-npx cap open ios
+npm run build              # site web
+VITE_BASE=./ npm run build # build pour APK
+npm run cap:sync           # build + sync Android
+npm run android:apk        # sync + assembleDebug (si SDK installé)
 ```
 
-## Sécurité
+## Open source
 
-- Seule la clé **anon** Supabase est embarquée (jamais `service_role`)
-- RLS activé sur toutes les tables
-- HTTPS forcé (scheme Capacitor)
-- Sessions Auth persistées de façon sécurisée côté client
-- Mode hors ligne : file d’attente locale, sync au retour réseau
+- Repo public GitHub  
+- Capacitor, React, Vite : licences open source  
+- Tu peux redistribuer l’APK librement (hors Play Store)
 
-## Web
+## Limites actuelles
 
-Toujours disponible : https://maquis-manager-ai-a-jour.vercel.app
+- iOS : pas d’APK (autre process App Store / TestFlight)  
+- Sync offline : prioritaire sur **Caisse, Inventaire, Dépenses**  
+- Play Store : optionnel plus tard (~25 $ une fois)

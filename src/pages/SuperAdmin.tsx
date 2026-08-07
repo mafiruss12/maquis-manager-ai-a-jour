@@ -346,7 +346,8 @@ export default function SuperAdmin() {
               <option value="maquis">Maquis</option>
               <option value="restaurant">Restaurant</option>
               <option value="bar">Bar</option>
-              <option value="autre">Autre</option>
+              <option value="magasin">Magasin</option>
+              <option value="location_event">Location événementielle</option>
             </select>
           </div>
           <div>

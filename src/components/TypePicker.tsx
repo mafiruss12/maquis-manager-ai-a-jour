@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Beer, Wine, UtensilsCrossed, Store, Loader2, Check } from 'lucide-react';
+import { Beer, Wine, UtensilsCrossed, Store, CalendarDays, Loader2, Check } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import {
@@ -15,6 +15,7 @@ const ICONS: Record<BusinessType, typeof Beer> = {
   bar: Wine,
   restaurant: UtensilsCrossed,
   magasin: Store,
+  location_event: CalendarDays,
 };
 
 interface Props {

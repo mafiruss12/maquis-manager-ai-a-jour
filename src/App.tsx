@@ -24,6 +24,17 @@ import AIAssistant from '@/pages/AIAssistant';
 import CalendarPage from '@/pages/CalendarPage';
 import ChatPage from '@/pages/Chat';
 import TeamPage from '@/pages/Team';
+import RentDashboard from '@/pages/rent/Dashboard';
+import RentEquipment from '@/pages/rent/Equipment';
+import RentClients from '@/pages/rent/Clients';
+import RentOrders from '@/pages/rent/Orders';
+import RentMovements from '@/pages/rent/Movements';
+import RentPayments from '@/pages/rent/Payments';
+import RentCalendar from '@/pages/rent/Calendar';
+import RentPacks from '@/pages/rent/Packs';
+import RentInvoices from '@/pages/rent/Invoices';
+import { isLocationEvent } from '@/lib/businessTypes';
+
 import AppLayout from '@/components/AppLayout';
 import { Loader2 } from 'lucide-react';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -46,6 +57,12 @@ function ConfigError() {
       </div>
     </div>
   );
+}
+
+function DashboardSwitch() {
+  const { activeEstablishment } = useAuth();
+  if (isLocationEvent(activeEstablishment?.type)) return <RentDashboard />;
+  return <Dashboard />;
 }
 
 function ProtectedRoutes() {
@@ -83,7 +100,15 @@ function ProtectedRoutes() {
   return (
     <AppLayout>
       <Routes>
-        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/dashboard" element={<DashboardSwitch />} />
+        <Route path="/rent/equipment" element={<RentEquipment />} />
+        <Route path="/rent/clients" element={<RentClients />} />
+        <Route path="/rent/orders" element={<RentOrders />} />
+        <Route path="/rent/movements" element={<RentMovements />} />
+        <Route path="/rent/payments" element={<RentPayments />} />
+        <Route path="/rent/calendar" element={<RentCalendar />} />
+        <Route path="/rent/packs" element={<RentPacks />} />
+        <Route path="/rent/invoices" element={<RentInvoices />} />
         <Route path="/pos" element={<Caisse />} />
         <Route path="/caisse" element={<Navigate to="/pos" replace />} />
         <Route path="/orders" element={<Orders />} />

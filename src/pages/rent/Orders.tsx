@@ -1,0 +1,310 @@
+import { useEffect, useState } from 'react';
+import { ClipboardList, Plus, Loader2, MessageCircle, ExternalLink } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth';
+import { formatFCFA } from '@/lib/format';
+import { EmptyState, Modal, Badge } from '@/components/ui';
+import { RENTAL_STATUS_LABELS, buildWhatsAppLink } from '@/lib/businessTypes';
+import { notifyTeam, clientWhatsAppUrl } from '@/lib/rentalNotify';
+import type { RentalClient, RentalEquipment, RentalOrder, RentalOrderItem } from '@/lib/rentalTypes';
+import { orderBalance } from '@/lib/rentalTypes';
+
+export default function RentOrders() {
+  const { member, user } = useAuth();
+  const [orders, setOrders] = useState<RentalOrder[]>([]);
+  const [clients, setClients] = useState<RentalClient[]>([]);
+  const [equipment, setEquipment] = useState<RentalEquipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [waLink, setWaLink] = useState<string | null>(null);
+
+  const [clientId, setClientId] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [returnDate, setReturnDate] = useState('');
+  const [deposit, setDeposit] = useState(0);
+  const [lines, setLines] = useState<{ equipment_id: string; qty: number }[]>([
+    { equipment_id: '', qty: 1 },
+  ]);
+
+  async function load() {
+    if (!member?.establishment_id) {
+      setLoading(false);
+      return;
+    }
+    const est = member.establishment_id;
+    const [o, c, e] = await Promise.all([
+      supabase.from('rental_orders').select('*').eq('establishment_id', est).order('created_at', { ascending: false }),
+      supabase.from('rental_clients').select('*').eq('establishment_id', est).order('full_name'),
+      supabase.from('rental_equipment').select('*').eq('establishment_id', est).order('name'),
+    ]);
+    setOrders((o.data ?? []) as RentalOrder[]);
+    setClients((c.data ?? []) as RentalClient[]);
+    setEquipment((e.data ?? []) as RentalEquipment[]);
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [member?.establishment_id]);
+
+  async function createOrder() {
+    if (!member?.establishment_id) return;
+    const validLines = lines.filter((l) => l.equipment_id && l.qty > 0);
+    if (!validLines.length) {
+      setError('Ajoutez au moins un article');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setWaLink(null);
+
+    // Check availability
+    for (const l of validLines) {
+      const eq = equipment.find((x) => x.id === l.equipment_id);
+      if (!eq || eq.qty_available < l.qty) {
+        setError(`Stock insuffisant pour ${eq?.name || 'article'}`);
+        setSaving(false);
+        return;
+      }
+    }
+
+    const client = clients.find((c) => c.id === clientId);
+    let total = 0;
+    const itemRows: Omit<RentalOrderItem, 'id' | 'order_id'>[] = validLines.map((l) => {
+      const eq = equipment.find((x) => x.id === l.equipment_id)!;
+      const line_total = Number(eq.unit_price) * l.qty;
+      total += line_total;
+      return {
+        equipment_id: eq.id,
+        equipment_name: eq.name,
+        qty: l.qty,
+        unit_price: Number(eq.unit_price),
+        line_total,
+      };
+    });
+
+    const { data: order, error: oErr } = await supabase
+      .from('rental_orders')
+      .insert({
+        establishment_id: member.establishment_id,
+        client_id: clientId || null,
+        client_name: client?.full_name || null,
+        client_phone: client?.phone || null,
+        event_date: eventDate || null,
+        return_date: returnDate || null,
+        status: 'confirmed',
+        total_amount: total,
+        deposit_amount: Number(deposit) || 0,
+        paid_amount: Number(deposit) || 0,
+        created_by: user?.id || null,
+      })
+      .select()
+      .single();
+
+    if (oErr || !order) {
+      setError(oErr?.message || 'Erreur création');
+      setSaving(false);
+      return;
+    }
+
+    await supabase.from('rental_order_items').insert(
+      itemRows.map((r) => ({ ...r, order_id: order.id }))
+    );
+
+    // Reserve stock
+    for (const l of validLines) {
+      const eq = equipment.find((x) => x.id === l.equipment_id)!;
+      await supabase
+        .from('rental_equipment')
+        .update({
+          qty_available: eq.qty_available - l.qty,
+          qty_reserved: eq.qty_reserved + l.qty,
+        })
+        .eq('id', eq.id);
+    }
+
+    if (Number(deposit) > 0) {
+      await supabase.from('rental_payments').insert({
+        establishment_id: member.establishment_id,
+        order_id: order.id,
+        amount: Number(deposit),
+        method: 'cash',
+        note: 'Acompte à la commande',
+      });
+    }
+
+    await notifyTeam(
+      member.establishment_id,
+      'Nouvelle commande location',
+      `${client?.full_name || 'Client'} — ${formatFCFA(total)} — ${eventDate || 'date à préciser'}`,
+      '/rent/orders'
+    );
+
+    const wa = clientWhatsAppUrl(
+      client?.phone,
+      `#${order.id.slice(0, 8)}`,
+      `Votre commande est confirmée pour le ${eventDate || '…'}.\nTotal: ${formatFCFA(total)}\nAcompte: ${formatFCFA(Number(deposit) || 0)}\nSolde: ${formatFCFA(total - (Number(deposit) || 0))}`
+    );
+    setWaLink(wa);
+
+    setSaving(false);
+    setOpen(false);
+    setLines([{ equipment_id: '', qty: 1 }]);
+    setDeposit(0);
+    setClientId('');
+    await load();
+  }
+
+  if (loading) {
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="animate-spin text-primary-500" size={28} />
+      </div>
+    );
+  }
+
+  const statusColor = (s: string) =>
+    s === 'confirmed' ? 'primary' : s === 'out' ? 'warning' : s === 'returned' ? 'success' : 'neutral';
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold font-display text-stone-100">Commandes</h1>
+          <p className="text-stone-400 text-sm">Réservations matériel + validation stock</p>
+        </div>
+        <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2">
+          <Plus size={18} /> Nouvelle commande
+        </button>
+      </div>
+
+      {waLink && (
+        <div className="card mb-4 border border-success-500/30 bg-success-500/5 flex items-center gap-3">
+          <MessageCircle className="text-success-400" size={20} />
+          <div className="flex-1 text-sm text-stone-300">Commande créée. Notifier le client sur WhatsApp ?</div>
+          <a href={waLink} target="_blank" rel="noreferrer" className="btn-primary text-sm flex items-center gap-1">
+            WhatsApp <ExternalLink size={14} />
+          </a>
+        </div>
+      )}
+
+      {orders.length === 0 ? (
+        <EmptyState icon={<ClipboardList size={48} />} title="Aucune commande" message="Créez une réservation." />
+      ) : (
+        <div className="space-y-2">
+          {orders.map((o) => (
+            <div key={o.id} className="card">
+              <div className="flex flex-wrap items-start gap-2 justify-between">
+                <div>
+                  <p className="font-medium text-stone-100">{o.client_name || 'Sans client'}</p>
+                  <p className="text-xs text-stone-500">
+                    Événement {o.event_date || '—'} · Retour {o.return_date || '—'}
+                  </p>
+                </div>
+                <Badge color={statusColor(o.status) as any}>{RENTAL_STATUS_LABELS[o.status] || o.status}</Badge>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                <span className="text-stone-300">Total {formatFCFA(Number(o.total_amount))}</span>
+                <span className="text-stone-400">Payé {formatFCFA(Number(o.paid_amount))}</span>
+                <span className="text-amber-400">Solde {formatFCFA(orderBalance(o))}</span>
+              </div>
+              {o.client_phone && (
+                <a
+                  href={buildWhatsAppLink(
+                    o.client_phone,
+                    `Bonjour ${o.client_name || ''}, rappel commande du ${o.event_date || ''} — solde ${formatFCFA(orderBalance(o))}`
+                  )}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-sm text-success-400 mt-2"
+                >
+                  <MessageCircle size={14} /> WhatsApp client
+                </a>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal open={open} onClose={() => setOpen(false)} title="Nouvelle commande">
+        <div className="space-y-3 max-h-[70vh] overflow-y-auto">
+          {error && (
+            <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">{error}</div>
+          )}
+          <div>
+            <label className="label">Client</label>
+            <select className="input-field" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+              <option value="">— Choisir —</option>
+              {clients.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.full_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="label">Date événement</label>
+              <input type="date" className="input-field" value={eventDate} onChange={(e) => setEventDate(e.target.value)} />
+            </div>
+            <div>
+              <label className="label">Date retour</label>
+              <input type="date" className="input-field" value={returnDate} onChange={(e) => setReturnDate(e.target.value)} />
+            </div>
+          </div>
+          <div>
+            <label className="label">Articles</label>
+            {lines.map((l, i) => (
+              <div key={i} className="flex gap-2 mb-2">
+                <select
+                  className="input-field flex-1"
+                  value={l.equipment_id}
+                  onChange={(e) => {
+                    const next = [...lines];
+                    next[i] = { ...next[i], equipment_id: e.target.value };
+                    setLines(next);
+                  }}
+                >
+                  <option value="">Matériel…</option>
+                  {equipment.map((eq) => (
+                    <option key={eq.id} value={eq.id}>
+                      {eq.name} (dispo {eq.qty_available})
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  className="input-field w-20"
+                  value={l.qty}
+                  onChange={(e) => {
+                    const next = [...lines];
+                    next[i] = { ...next[i], qty: Number(e.target.value) };
+                    setLines(next);
+                  }}
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              className="text-sm text-primary-400"
+              onClick={() => setLines([...lines, { equipment_id: '', qty: 1 }])}
+            >
+              + Ligne
+            </button>
+          </div>
+          <div>
+            <label className="label">Acompte (FCFA)</label>
+            <input type="number" min={0} className="input-field" value={deposit} onChange={(e) => setDeposit(Number(e.target.value))} />
+          </div>
+          <button onClick={createOrder} disabled={saving} className="btn-primary w-full">
+            {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Confirmer la commande'}
+          </button>
+        </div>
+      </Modal>
+    </div>
+  );
+}

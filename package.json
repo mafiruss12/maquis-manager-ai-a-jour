@@ -9,12 +9,14 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
-    "cap:sync": "npm run build && npx cap sync android",
+    "cap:sync": "npm run build:mobile && npx cap sync android",
     "cap:open": "npx cap open android",
     "android:build": "npm run cap:sync && cd android && ./gradlew assembleDebug",
     "cap:add": "npx cap add android",
     "android:apk": "npm run cap:sync && cd android && ./gradlew assembleDebug",
-    "android:release": "npm run cap:sync && cd android && ./gradlew bundleRelease"
+    "android:release": "npm run cap:sync && cd android && ./gradlew bundleRelease",
+    "build:mobile": "VITE_BASE=./ vite build",
+    "android:open": "npx cap open android"
   },
   "dependencies": {
     "@capacitor/android": "^6.2.0",

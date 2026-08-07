@@ -1,6 +1,12 @@
-/* Service Worker — Maquis Manager PWA */
-const CACHE_NAME = 'maquis-v1';
-const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
+/* Service Worker — Maquis Manager offline */
+const CACHE_NAME = 'maquis-offline-v2';
+const PRECACHE = [
+  '/',
+  '/index.html',
+  '/manifest.webmanifest',
+  '/icon-192.png',
+  '/icon-512.png',
+];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -18,12 +24,13 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  // Ne pas intercepter les appels API Supabase — gérés par la couche offline JS
+  // API Supabase : laisse le JS offline (IndexedDB) gérer
   if (url.hostname.includes('supabase.co')) return;
 
-  // Navigation : network-first, fallback cache
+  // Navigation SPA : network first, fallback index
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -32,18 +39,18 @@ self.addEventListener('fetch', (event) => {
           caches.open(CACHE_NAME).then((c) => c.put(request, clone));
           return res;
         })
-        .catch(() => caches.match('/index.html'))
+        .catch(() => caches.match('/index.html').then((r) => r || caches.match('/')))
     );
     return;
   }
 
-  // Assets : cache-first
+  // Assets same-origin : cache-first
   if (url.origin === self.location.origin) {
     event.respondWith(
       caches.match(request).then((cached) => {
         const fetched = fetch(request)
           .then((res) => {
-            if (res.ok) {
+            if (res && res.ok) {
               const clone = res.clone();
               caches.open(CACHE_NAME).then((c) => c.put(request, clone));
             }
