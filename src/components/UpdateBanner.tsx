@@ -3,6 +3,8 @@ import { Download, X, RefreshCw } from 'lucide-react';
 import {
   APP_VERSION,
   fetchLatestRelease,
+  fetchRemoteWebVersion,
+  forceAppUpdate,
   isNewerVersion,
   type LatestRelease,
 } from '@/lib/appVersion';
@@ -11,23 +13,44 @@ const DISMISS_KEY = 'maquis_update_dismissed';
 
 export default function UpdateBanner() {
   const [release, setRelease] = useState<LatestRelease | null>(null);
+  const [webNotes, setWebNotes] = useState<string>('');
+  const [webNewer, setWebNewer] = useState(false);
   const [visible, setVisible] = useState(false);
   const [checking, setChecking] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
   async function check(force = false) {
     setChecking(true);
     try {
-      const latest = await fetchLatestRelease();
-      if (!latest?.tag) return;
-      if (!isNewerVersion(latest.tag, APP_VERSION)) {
-        setVisible(false);
+      const [latest, remote] = await Promise.all([fetchLatestRelease(), fetchRemoteWebVersion()]);
+
+      let show = false;
+      if (latest?.tag && isNewerVersion(latest.tag, APP_VERSION)) {
+        const dismissed = sessionStorage.getItem(DISMISS_KEY);
+        if (force || dismissed !== latest.tag) {
+          setRelease(latest);
+          show = true;
+        }
+      } else {
         setRelease(null);
-        return;
       }
-      const dismissed = sessionStorage.getItem(DISMISS_KEY);
-      if (!force && dismissed === latest.tag) return;
-      setRelease(latest);
-      setVisible(true);
+
+      if (remote?.version && isNewerVersion(remote.version, APP_VERSION)) {
+        setWebNewer(true);
+        setWebNotes(remote.notes || '');
+        show = true;
+      } else if (remote?.version) {
+        // Même version distante : on peut quand même proposer un refresh discret seulement si force
+        setWebNewer(false);
+      }
+
+      setVisible(show || force);
+      if (force && !show) {
+        // Pas de nouvelle version : propose quand même de rafraîchir le contenu
+        setVisible(true);
+        setWebNewer(true);
+        setWebNotes('Rafraîchir le contenu et vider le cache local.');
+      }
     } finally {
       setChecking(false);
     }
@@ -35,7 +58,7 @@ export default function UpdateBanner() {
 
   useEffect(() => {
     check();
-    const t = setInterval(() => check(), 1000 * 60 * 60); // 1h
+    const t = setInterval(() => check(), 1000 * 60 * 30);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -45,45 +68,61 @@ export default function UpdateBanner() {
     setVisible(false);
   }
 
-  function download() {
+  async function applyWebUpdate() {
+    setUpdating(true);
+    await forceAppUpdate();
+  }
+
+  function downloadApk() {
     const url = release?.apkUrl || release?.htmlUrl;
     if (url) window.open(url, '_blank', 'noopener,noreferrer');
   }
 
-  if (!visible || !release) {
-    // Petit bouton discret en bas seulement si on veut forcer le check — skip
-    return null;
-  }
+  if (!visible) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-[60] max-w-lg mx-auto">
       <div className="rounded-2xl border border-amber-500/40 bg-stone-900/95 backdrop-blur shadow-2xl p-4 flex gap-3 items-start">
         <div className="w-10 h-10 rounded-xl bg-amber-500/20 flex items-center justify-center shrink-0">
-          <Download className="text-amber-400" size={20} />
+          <RefreshCw className="text-amber-400" size={20} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-stone-100">
-            Nouvelle version disponible
-          </p>
+          <p className="text-sm font-semibold text-stone-100">Mise à jour</p>
           <p className="text-xs text-stone-400 mt-0.5">
-            v{APP_VERSION} → <span className="text-amber-300">v{release.tag}</span>
-            {release.name ? ` · ${release.name}` : ''}
+            Version installée : <span className="text-stone-200">v{APP_VERSION}</span>
+            {release?.tag ? (
+              <>
+                {' '}
+                → APK <span className="text-amber-300">v{release.tag}</span>
+              </>
+            ) : null}
           </p>
-          <p className="text-[11px] text-stone-500 mt-1">
-            Installez par-dessus l’ancienne version (sans désinstaller) pour garder vos données.
-          </p>
+          {webNotes ? <p className="text-[11px] text-stone-500 mt-1">{webNotes}</p> : null}
           <div className="flex flex-wrap gap-2 mt-3">
-            <button
-              type="button"
-              onClick={download}
-              className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5"
-            >
-              <Download size={14} /> Télécharger la mise à jour
-            </button>
+            {(webNewer || !release) && (
+              <button
+                type="button"
+                onClick={applyWebUpdate}
+                disabled={updating}
+                className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5"
+              >
+                <RefreshCw size={14} className={updating ? 'animate-spin' : ''} />
+                {updating ? 'Mise à jour…' : 'Mettre à jour'}
+              </button>
+            )}
+            {release && (
+              <button
+                type="button"
+                onClick={downloadApk}
+                className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5"
+              >
+                <Download size={14} /> Télécharger APK
+              </button>
+            )}
             <button
               type="button"
               onClick={() => check(true)}
-              className="btn-ghost text-xs py-2 px-2 flex items-center gap-1"
+              className="btn-ghost text-xs py-2 px-2"
               disabled={checking}
             >
               <RefreshCw size={14} className={checking ? 'animate-spin' : ''} />

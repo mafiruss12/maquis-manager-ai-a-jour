@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound} from 'lucide-react';
+import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound, RefreshCw, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
-import { APP_VERSION, fetchLatestRelease, isNewerVersion } from '@/lib/appVersion';
+import { APP_VERSION, fetchLatestRelease, fetchRemoteWebVersion, forceAppUpdate, isNewerVersion, WEB_APP_URL } from '@/lib/appVersion';
 import type { Establishment } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
 
 export default function SettingsPage() {
-  const { member, refresh } = useAuth();
+  const { member, refresh, signOut } = useAuth();
   const [est, setEst] = useState<Establishment | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -369,30 +369,70 @@ export default function SettingsPage() {
           )}
         </div>
 
-        {/* Version app */}
-        <div className="card">
-          <h2 className="text-lg font-semibold text-stone-100 mb-2">Application mobile</h2>
-          <p className="text-sm text-stone-400">Version installée (APK) : <span className="text-stone-200 font-mono">v{APP_VERSION}</span></p>
-          <p className="text-xs text-stone-500 mt-1">Les nouveautés du site s&apos;appliquent automatiquement. Une nouvelle APK n&apos;est nécessaire que pour l&apos;icône ou la coque Android.</p>
+        {/* Mises à jour */}
+        <div className="card space-y-3">
+          <h2 className="text-lg font-semibold text-stone-100">Mises à jour</h2>
+          <p className="text-sm text-stone-400">
+            Version actuelle : <span className="text-stone-200 font-mono">v{APP_VERSION}</span>
+          </p>
+          <p className="text-xs text-stone-500">
+            Appuie sur <strong className="text-stone-300">Mettre à jour</strong> pour charger les dernières fonctions
+            (location, catégories, corrections…). Cela vide le cache et recharge l&apos;app.
+          </p>
           <button
             type="button"
-            className="btn-secondary mt-3 text-sm"
+            className="btn-primary w-full flex items-center justify-center gap-2"
+            onClick={async () => {
+              try {
+                const remote = await fetchRemoteWebVersion();
+                if (remote?.version && isNewerVersion(remote.version)) {
+                  const ok = confirm(
+                    `Nouvelle version v${remote.version} disponible.\n${remote.notes || ''}\n\nMettre à jour maintenant ?`
+                  );
+                  if (!ok) return;
+                }
+              } catch { /* force update anyway */ }
+              await forceAppUpdate();
+            }}
+          >
+            <RefreshCw size={18} /> Mettre à jour
+          </button>
+          <button
+            type="button"
+            className="btn-secondary w-full flex items-center justify-center gap-2 text-sm"
             onClick={async () => {
               const latest = await fetchLatestRelease();
               if (!latest) {
-                alert('Impossible de vérifier les mises à jour pour le moment.');
+                alert('Impossible de vérifier les APK sur GitHub pour le moment.');
                 return;
               }
               if (isNewerVersion(latest.tag)) {
-                if (confirm(`Nouvelle version v${latest.tag} disponible. Télécharger ?`)) {
+                if (confirm(`Nouvelle APK v${latest.tag} disponible. Télécharger ?`)) {
                   window.open(latest.apkUrl || latest.htmlUrl, '_blank');
                 }
               } else {
-                alert(`Vous êtes à jour (v${APP_VERSION}).`);
+                alert(`APK à jour (v${APP_VERSION}). Pour le contenu : utilise « Mettre à jour ».`);
               }
             }}
           >
-            Vérifier les mises à jour APK
+            <Download size={16} /> Vérifier nouvelle APK
+          </button>
+          <p className="text-[11px] text-stone-600">
+            Site : {WEB_APP_URL}
+          </p>
+        </div>
+
+        <div className="card space-y-3">
+          <h2 className="text-lg font-semibold text-stone-100">Session</h2>
+          <button
+            type="button"
+            className="btn-secondary w-full flex items-center justify-center gap-2 text-error-300 border-error-500/30"
+            onClick={async () => {
+              await signOut();
+              window.location.assign('/');
+            }}
+          >
+            Se déconnecter
           </button>
         </div>
 

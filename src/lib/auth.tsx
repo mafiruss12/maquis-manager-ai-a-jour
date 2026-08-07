@@ -379,12 +379,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signOut() {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut({ scope: 'local' });
+    } catch {
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        /* ignore network errors — on nettoie quand même l'état local */
+      }
+    }
+    setSession(null);
+    setUser(null);
     setMember(null);
     setAccessRequest(null);
     setNeedsAccess(false);
     setMyEstablishments([]);
     setActiveEstablishment(null);
+    setLoading(false);
   }
 
   async function refresh() {

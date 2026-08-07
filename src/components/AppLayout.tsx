@@ -129,8 +129,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }, [member, activeEstablishment]);
 
   async function handleSignOut() {
-    await signOut();
-    navigate('/');
+    try {
+      await signOut();
+    } finally {
+      // Force retour écran auth même si le réseau échoue
+      window.location.assign('/');
+    }
   }
 
   const visibleSections = NAV_SECTIONS.map((section) => ({
