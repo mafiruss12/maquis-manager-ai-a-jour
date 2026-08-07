@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Package, Plus, Loader2 } from 'lucide-react';
+import { Package, Plus, Loader2, Minus, Trash2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { formatFCFA } from '@/lib/format';
@@ -44,6 +44,24 @@ export default function RentEquipment() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?.establishment_id]);
+
+  async function adjustQty(it: RentalEquipment, delta: number) {
+    const newTotal = Math.max(0, Number(it.qty_total) + delta);
+    const diff = newTotal - Number(it.qty_total);
+    const newAvail = Math.max(0, Number(it.qty_available) + diff);
+    const { error: err } = await supabase
+      .from('rental_equipment')
+      .update({ qty_total: newTotal, qty_available: newAvail })
+      .eq('id', it.id);
+    if (err) setError(err.message);
+    else await load();
+  }
+
+  async function removeItem(it: RentalEquipment) {
+    if (!confirm(`Supprimer ${it.name} ?`)) return;
+    await supabase.from('rental_equipment').delete().eq('id', it.id);
+    await load();
+  }
 
   async function save() {
     if (!member?.establishment_id || !form.name.trim()) return;
@@ -136,6 +154,17 @@ export default function RentEquipment() {
                   <p className="text-stone-500">Dehors</p>
                   <p className="font-semibold text-primary-400">{it.qty_out}</p>
                 </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <button type="button" className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200" onClick={() => adjustQty(it, -1)} title="Diminuer">
+                  <Minus size={16} />
+                </button>
+                <button type="button" className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200" onClick={() => adjustQty(it, 1)} title="Augmenter">
+                  <Plus size={16} />
+                </button>
+                <button type="button" className="p-2 rounded-lg hover:bg-error-500/10 text-stone-400 hover:text-error-400" onClick={() => removeItem(it)} title="Supprimer">
+                  <Trash2 size={16} />
+                </button>
               </div>
             </div>
           ))}

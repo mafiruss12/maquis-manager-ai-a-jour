@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Calendar as CalIcon, Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Calendar as CalIcon, Loader2, Plus } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { EmptyState, Badge } from '@/components/ui';
@@ -46,8 +47,15 @@ export default function RentCalendar() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold font-display text-stone-100 mb-1">Calendrier</h1>
-      <p className="text-stone-400 text-sm mb-6">Événements et statuts des commandes</p>
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold font-display text-stone-100 mb-1">Calendrier</h1>
+          <p className="text-stone-400 text-sm">Événements et statuts des commandes</p>
+        </div>
+        <Link to="/rent/orders" className="btn-primary flex items-center gap-2">
+          <Plus size={18} /> Nouvelle commande
+        </Link>
+      </div>
 
       {dates.length === 0 ? (
         <EmptyState icon={<CalIcon size={48} />} title="Aucun événement" message="Les commandes datées apparaîtront ici." />

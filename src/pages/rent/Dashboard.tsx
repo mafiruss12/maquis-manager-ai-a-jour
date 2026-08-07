@@ -23,6 +23,11 @@ export default function RentDashboard() {
     unpaid: 0,
     returnAlerts: 0,
   });
+  const [lists, setLists] = useState<{
+    pending: RentalOrder[];
+    out: RentalOrder[];
+    done: RentalOrder[];
+  }>({ pending: [], out: [], done: [] });
 
   useEffect(() => {
     (async () => {
@@ -53,6 +58,11 @@ export default function RentDashboard() {
       ).length;
 
       setStats({ openOrders, todayOrders, outQty, monthRevenue, unpaid, returnAlerts });
+      setLists({
+        pending: orders.filter((o) => ['draft', 'confirmed'].includes(o.status)).slice(0, 8),
+        out: orders.filter((o) => o.status === 'out').slice(0, 8),
+        done: orders.filter((o) => o.status === 'returned').slice(0, 8),
+      });
       setLoading(false);
     })();
   }, [member?.establishment_id]);
@@ -102,7 +112,7 @@ export default function RentDashboard() {
         <StatCard title="Retours à faire" value={String(stats.returnAlerts)} icon={<AlertTriangle size={20} />} />
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-6">
         {shortcuts.map((s) => {
           const Icon = s.icon;
           return (
@@ -115,6 +125,58 @@ export default function RentDashboard() {
             </Link>
           );
         })}
+      </div>
+
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="font-semibold text-stone-100">Commandes par statut</h2>
+        <Link to="/rent/orders" className="text-sm text-primary-400">Nouvelle commande →</Link>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="card">
+          <p className="text-xs uppercase text-amber-400 mb-2">À livrer / confirmées</p>
+          {lists.pending.length === 0 ? (
+            <p className="text-sm text-stone-500">Aucune</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {lists.pending.map((o) => (
+                <li key={o.id} className="flex justify-between gap-2">
+                  <span className="text-stone-300 truncate">{o.client_name || 'Client'}</span>
+                  <span className="text-stone-500 shrink-0">{o.event_date || '—'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="card">
+          <p className="text-xs uppercase text-primary-400 mb-2">En cours (dehors)</p>
+          {lists.out.length === 0 ? (
+            <p className="text-sm text-stone-500">Aucune</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {lists.out.map((o) => (
+                <li key={o.id} className="flex justify-between gap-2">
+                  <span className="text-stone-300 truncate">{o.client_name || 'Client'}</span>
+                  <span className="text-stone-500 shrink-0">retour {o.return_date || '—'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div className="card">
+          <p className="text-xs uppercase text-success-400 mb-2">Terminées</p>
+          {lists.done.length === 0 ? (
+            <p className="text-sm text-stone-500">Aucune</p>
+          ) : (
+            <ul className="space-y-2 text-sm">
+              {lists.done.map((o) => (
+                <li key={o.id} className="flex justify-between gap-2">
+                  <span className="text-stone-300 truncate">{o.client_name || 'Client'}</span>
+                  <span className="text-stone-500 shrink-0">{o.event_date || '—'}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );

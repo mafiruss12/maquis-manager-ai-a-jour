@@ -157,3 +157,10 @@ export function buildWhatsAppLink(phone: string | null | undefined, message: str
   }
   return `https://wa.me/${normalized}?text=${encodeURIComponent(message)}`;
 }
+
+
+export function buildSmsLink(phone: string | null | undefined, message: string): string {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  return `sms:${digits}?body=${encodeURIComponent(message)}`;
+}
