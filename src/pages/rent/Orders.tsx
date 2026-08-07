@@ -28,6 +28,7 @@ export default function RentOrders() {
   const [eventDate, setEventDate] = useState('');
   const [returnDate, setReturnDate] = useState('');
   const [deposit, setDeposit] = useState(0);
+  const [caution, setCaution] = useState(0);
   const [lines, setLines] = useState<{ equipment_id: string; qty: number }[]>([
     { equipment_id: '', qty: 1 },
   ]);
@@ -65,11 +66,45 @@ export default function RentOrders() {
     setError(null);
     setWaLink(null);
 
-    // Check availability
+    // Disponibilité + conflit de dates
+    if (eventDate && returnDate) {
+      const { data: overlapOrders } = await supabase
+        .from('rental_orders')
+        .select('id, client_name, event_date, return_date, status')
+        .eq('establishment_id', member.establishment_id)
+        .in('status', ['draft', 'confirmed', 'out'])
+        .lte('event_date', returnDate)
+        .gte('return_date', eventDate);
+
+      if (overlapOrders && overlapOrders.length > 0) {
+        const ids = overlapOrders.map((o: { id: string }) => o.id);
+        const { data: overlapItems } = await supabase
+          .from('rental_order_items')
+          .select('equipment_id, qty, equipment_name, order_id')
+          .in('order_id', ids);
+
+        for (const l of validLines) {
+          const eq = equipment.find((x) => x.id === l.equipment_id);
+          if (!eq) continue;
+          const reservedOnPeriod = (overlapItems || [])
+            .filter((it: { equipment_id: string; qty: number }) => it.equipment_id === l.equipment_id)
+            .reduce((s: number, it: { qty: number }) => s + Number(it.qty), 0);
+          const free = Number(eq.qty_total) - Number(eq.qty_damaged) - reservedOnPeriod;
+          if (l.qty > free) {
+            setError(
+              `Conflit de dates pour ${eq.name} : ${Math.max(0, free)} dispo sur la période (besoin ${l.qty}).`
+            );
+            setSaving(false);
+            return;
+          }
+        }
+      }
+    }
+
     for (const l of validLines) {
       const eq = equipment.find((x) => x.id === l.equipment_id);
       if (!eq || eq.qty_available < l.qty) {
-        setError(`Stock insuffisant pour ${eq?.name || 'article'}`);
+        setError(`Stock insuffisant pour ${eq?.name || 'article'} (dispo ${eq?.qty_available ?? 0})`);
         setSaving(false);
         return;
       }
@@ -103,6 +138,8 @@ export default function RentOrders() {
         total_amount: total,
         deposit_amount: Number(deposit) || 0,
         paid_amount: Number(deposit) || 0,
+        caution_amount: Number(caution) || 0,
+        caution_returned: false,
         created_by: user?.id || null,
       })
       .select()
@@ -158,6 +195,7 @@ export default function RentOrders() {
     setOpen(false);
     setLines([{ equipment_id: '', qty: 1 }]);
     setDeposit(0);
+    setCaution(0);
     setClientId('');
     await load();
   }
@@ -336,6 +374,8 @@ export default function RentOrders() {
           <div>
             <label className="label">Acompte (FCFA)</label>
             <input type="number" min={0} className="input-field" value={deposit} onChange={(e) => setDeposit(Number(e.target.value))} />
+            <label className="label mt-2">Caution (FCFA)</label>
+            <input type="number" min={0} className="input-field" value={caution} onChange={(e) => setCaution(Number(e.target.value))} />
           </div>
           <button onClick={createOrder} disabled={saving} className="btn-primary w-full">
             {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Confirmer la commande'}

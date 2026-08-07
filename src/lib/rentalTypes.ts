@@ -19,6 +19,8 @@ export interface RentalClient {
   full_name: string;
   phone: string | null;
   location: string | null;
+  whatsapp?: string | null;
+  email?: string | null;
   notes: string | null;
   created_at: string;
 }
@@ -37,6 +39,8 @@ export interface RentalOrder {
   total_amount: number;
   deposit_amount: number;
   paid_amount: number;
+  caution_amount?: number;
+  caution_returned?: boolean;
   notes: string | null;
   created_by: string | null;
   created_at: string;

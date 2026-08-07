@@ -6,7 +6,7 @@ import { EmptyState, Modal } from '@/components/ui';
 import { buildWhatsAppLink, buildSmsLink } from '@/lib/businessTypes';
 import type { RentalClient } from '@/lib/rentalTypes';
 
-const empty = { full_name: '', phone: '', location: '', notes: '' };
+const empty = { full_name: '', phone: '', whatsapp: '', email: '', location: '', notes: '' };
 
 export default function RentClients() {
   const { member } = useAuth();
@@ -49,6 +49,8 @@ export default function RentClients() {
     setForm({
       full_name: c.full_name || '',
       phone: c.phone || '',
+      whatsapp: (c as any).whatsapp || c.phone || '',
+      email: (c as any).email || '',
       location: c.location || '',
       notes: c.notes || '',
     });
@@ -66,6 +68,8 @@ export default function RentClients() {
     const payload = {
       full_name: form.full_name.trim(),
       phone: form.phone || null,
+      whatsapp: form.whatsapp || form.phone || null,
+      email: form.email || null,
       location: form.location || null,
       notes: form.notes || null,
     };
@@ -133,14 +137,15 @@ export default function RentClients() {
                   <Pencil size={14} className="text-stone-500" />
                 </p>
                 <p className="text-xs text-stone-500">
-                  {c.phone || '—'} · {c.location || '—'}
+                  {c.phone || '—'} · WA {(c as any).whatsapp || c.phone || '—'}
                 </p>
+                <p className="text-xs text-stone-600 truncate">{c.location || 'Pas de localisation'}{(c as any).email ? ` · ${(c as any).email}` : ''}</p>
               </div>
               <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                {c.phone && (
+                {(c.phone || (c as any).whatsapp) && (
                   <>
                     <a
-                      href={buildWhatsAppLink(c.phone, `Bonjour ${c.full_name}, `)}
+                      href={buildWhatsAppLink((c as any).whatsapp || c.phone, `Bonjour ${c.full_name}, `)}
                       target="_blank"
                       rel="noreferrer"
                       className="p-2.5 rounded-lg bg-success-500/15 text-success-400"
@@ -174,8 +179,16 @@ export default function RentClients() {
             <input className="input-field" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} placeholder="+225 …" />
           </div>
           <div>
-            <label className="label">Localisation</label>
-            <input className="input-field" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} />
+            <label className="label">WhatsApp</label>
+            <input className="input-field" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="Si différent du téléphone" />
+          </div>
+          <div>
+            <label className="label">E-mail</label>
+            <input className="input-field" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+          </div>
+          <div>
+            <label className="label">Localisation / adresse</label>
+            <input className="input-field" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Quartier, ville…" />
           </div>
           <div>
             <label className="label">Notes</label>
