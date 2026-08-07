@@ -122,112 +122,163 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadMemberData(currentUser: User) {
     try {
-    if (!isOnline()) {
-      const cached = await getCachedAuthProfile(currentUser.id);
-      if (cached?.member) {
-        setMember(cached.member as Member);
-        setAccessRequest(null);
-        setNeedsAccess(false);
-        return;
+      // Cache offline (non bloquant)
+      try {
+        if (!isOnline()) {
+          const cached = await getCachedAuthProfile(currentUser.id);
+          if (cached?.member) {
+            setMember(cached.member as Member);
+            setAccessRequest(null);
+            setNeedsAccess(false);
+            return;
+          }
+        }
+      } catch {
+        /* ignore cache */
       }
-    }
-    let { data: existingMember } = await supabase
-      .from('members')
-      .select('*')
-      .eq('user_id', currentUser.id)
-      .maybeSingle();
 
-    // Auto-lier un établissement créé par cet utilisateur s'il n'en a pas
-    if (existingMember && !existingMember.establishment_id) {
-      const { data: owned } = await supabase
-        .from('establishments')
-        .select('id')
-        .eq('created_by', currentUser.id)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (owned?.id) {
-        await supabase
-          .from('members')
-          .update({ establishment_id: owned.id })
-          .eq('user_id', currentUser.id);
-        const { data: refreshed } = await supabase
+      let existingMember: Member | null = null;
+      try {
+        const { data } = await supabase
           .from('members')
           .select('*')
           .eq('user_id', currentUser.id)
           .maybeSingle();
-        if (refreshed) existingMember = refreshed;
+        existingMember = (data as Member) || null;
+      } catch (e) {
+        console.error('members select', e);
       }
-    }
 
-    if (existingMember) {
-      setMember(existingMember as Member);
-      setAccessRequest(null);
-      setNeedsAccess(false);
-      await loadMyEstablishments(currentUser, existingMember as Member);
-      try {
-        await cacheAuthProfile({
-          userId: currentUser.id,
-          member: existingMember,
-        });
-        if (existingMember.establishment_id) {
-          await prefetchForOffline(existingMember.establishment_id, supabase);
+      // Lier un établissement déjà créé par l'utilisateur
+      if (existingMember && !existingMember.establishment_id) {
+        try {
+          const { data: owned } = await supabase
+            .from('establishments')
+            .select('id')
+            .eq('created_by', currentUser.id)
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          if (owned?.id) {
+            await supabase
+              .from('members')
+              .update({ establishment_id: owned.id })
+              .eq('user_id', currentUser.id);
+            const { data: refreshed } = await supabase
+              .from('members')
+              .select('*')
+              .eq('user_id', currentUser.id)
+              .maybeSingle();
+            if (refreshed) existingMember = refreshed as Member;
+          }
+        } catch {
+          /* ignore */
         }
-      } catch { /* offline cache optional */ }
-      return;
-    }
+      }
 
-    // Nouveau compte → propriétaire : crée son activité puis ses employés.
-    const email = currentUser.email ?? '';
-    const fullName =
-      (currentUser.user_metadata?.full_name as string) ||
-      (currentUser.user_metadata?.name as string) ||
-      email.split('@')[0] ||
-      'Utilisateur';
+      if (existingMember) {
+        setMember(existingMember);
+        setAccessRequest(null);
+        setNeedsAccess(false);
+        try {
+          await loadMyEstablishments(currentUser, existingMember);
+        } catch {
+          /* ignore */
+        }
+        try {
+          await cacheAuthProfile({ userId: currentUser.id, member: existingMember });
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
 
-    const { data: newMember, error } = await supabase
-      .from('members')
-      .insert({
+      // Nouveau compte → propriétaire
+      const email = currentUser.email ?? '';
+      const fullName =
+        (currentUser.user_metadata?.full_name as string) ||
+        (currentUser.user_metadata?.name as string) ||
+        email.split('@')[0] ||
+        'Utilisateur';
+
+      const payload = {
+        user_id: currentUser.id,
+        email,
+        full_name: fullName,
+        role: 'owner' as const,
+        status: 'active' as const,
+        establishment_id: null,
+      };
+
+      let newMember: Member | null = null;
+      try {
+        const { data, error } = await supabase
+          .from('members')
+          .upsert(payload, { onConflict: 'user_id' })
+          .select()
+          .maybeSingle();
+        if (!error && data) newMember = data as Member;
+        if (error) console.error('member upsert', error);
+      } catch (e) {
+        console.error('member upsert throw', e);
+      }
+
+      if (!newMember) {
+        // Relecture
+        try {
+          const { data } = await supabase
+            .from('members')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+          newMember = (data as Member) || null;
+        } catch {
+          /* */
+        }
+      }
+
+      if (newMember) {
+        setMember(newMember);
+        setAccessRequest(null);
+        setNeedsAccess(false);
+        try {
+          await loadMyEstablishments(currentUser, newMember);
+        } catch {
+          /* */
+        }
+        return;
+      }
+
+      // Dernier recours : profil minimal local pour ne JAMAIS bloquer la connexion
+      const fallback: Member = {
+        id: currentUser.id,
         user_id: currentUser.id,
         email,
         full_name: fullName,
         role: 'owner',
         status: 'active',
         establishment_id: null,
-      })
-      .select()
-      .single();
-
-    if (!error && newMember) {
-      setMember(newMember as Member);
+        created_at: new Date().toISOString(),
+      } as Member;
+      setMember(fallback);
       setAccessRequest(null);
       setNeedsAccess(false);
-      await loadMyEstablishments(currentUser, newMember as Member);
-    } else {
-      // Insert échoué (doublon / RLS) → recharger
-      const { data: retry } = await supabase
-        .from('members')
-        .select('*')
-        .eq('user_id', currentUser.id)
-        .maybeSingle();
-      if (retry) {
-        setMember(retry as Member);
-        setNeedsAccess(false);
-        await loadMyEstablishments(currentUser, retry as Member);
-      } else {
-        console.error('member insert failed', error);
-        setMember(null);
-        setMyEstablishments([]);
-        setActiveEstablishment(null);
-      }
-    }
-    setAccessRequest(null);
-    setNeedsAccess(false);
-    } catch (e) {
-      console.error('loadMemberData', e);
-      setMember(null);
       setMyEstablishments([]);
       setActiveEstablishment(null);
+    } catch (e) {
+      console.error('loadMemberData', e);
+      // Ne jamais laisser l'utilisateur sans membre après login réussi
+      const email = currentUser.email ?? '';
+      setMember({
+        id: currentUser.id,
+        user_id: currentUser.id,
+        email,
+        full_name: email.split('@')[0] || 'Utilisateur',
+        role: 'owner',
+        status: 'active',
+        establishment_id: null,
+        created_at: new Date().toISOString(),
+      } as Member);
       setNeedsAccess(false);
     }
   }
