@@ -202,3 +202,46 @@ export async function fetchWithCache<T>(
   const cached = await cacheGet<T>(key);
   return { data: cached, fromCache: true };
 }
+
+
+/** Profil auth mis en cache pour usage hors ligne */
+export async function cacheAuthProfile(profile: {
+  userId: string;
+  member: unknown;
+  establishments?: unknown;
+}): Promise<void> {
+  await cacheSet(`auth:profile:${profile.userId}`, profile);
+  await cacheSet('auth:lastUserId', profile.userId);
+}
+
+export async function getCachedAuthProfile(userId?: string): Promise<{
+  userId: string;
+  member: unknown;
+  establishments?: unknown;
+} | null> {
+  const uid = userId || (await cacheGet<string>('auth:lastUserId'));
+  if (!uid) return null;
+  return cacheGet(`auth:profile:${uid}`);
+}
+
+/** Prefetch tables critiques après login (pour offline) */
+export async function prefetchForOffline(
+  establishmentId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+): Promise<void> {
+  if (!isOnline() || !establishmentId) return;
+  try {
+    const tables = ['products', 'expenses', 'sales'] as const;
+    for (const table of tables) {
+      const { data } = await supabase
+        .from(table)
+        .select('*')
+        .eq('establishment_id', establishmentId)
+        .limit(500);
+      if (data) await cacheSet(`${table}:${establishmentId}`, data);
+    }
+  } catch {
+    /* ignore */
+  }
+}

@@ -2,6 +2,8 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { toAuthEmail } from './login';
+import { isOnline, cacheAuthProfile, getCachedAuthProfile, prefetchForOffline } from './offline';
+import { getLoginLockRemaining, registerLoginFailure, registerLoginSuccess, isSafeLogin, safeErrorMessage } from './security';
 import type { Member, AccessRequest, Establishment } from './types';
 
 export interface MyEstablishment extends Establishment {
@@ -120,23 +122,62 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function loadMemberData(currentUser: User) {
     try {
-    const { data: existingMember } = await supabase
+    if (!isOnline()) {
+      const cached = await getCachedAuthProfile(currentUser.id);
+      if (cached?.member) {
+        setMember(cached.member as Member);
+        setAccessRequest(null);
+        setNeedsAccess(false);
+        return;
+      }
+    }
+    let { data: existingMember } = await supabase
       .from('members')
       .select('*')
       .eq('user_id', currentUser.id)
       .maybeSingle();
+
+    // Auto-lier un établissement créé par cet utilisateur s'il n'en a pas
+    if (existingMember && !existingMember.establishment_id) {
+      const { data: owned } = await supabase
+        .from('establishments')
+        .select('id')
+        .eq('created_by', currentUser.id)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (owned?.id) {
+        await supabase
+          .from('members')
+          .update({ establishment_id: owned.id })
+          .eq('user_id', currentUser.id);
+        const { data: refreshed } = await supabase
+          .from('members')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+        if (refreshed) existingMember = refreshed;
+      }
+    }
 
     if (existingMember) {
       setMember(existingMember as Member);
       setAccessRequest(null);
       setNeedsAccess(false);
       await loadMyEstablishments(currentUser, existingMember as Member);
+      try {
+        await cacheAuthProfile({
+          userId: currentUser.id,
+          member: existingMember,
+        });
+        if (existingMember.establishment_id) {
+          await prefetchForOffline(existingMember.establishment_id, supabase);
+        }
+      } catch { /* offline cache optional */ }
       return;
     }
 
-    // Nouveau compte → toujours employé sans établissement.
-    // Seul un super_admin peut promouvoir (Administration).
-    // (Le compte super_admin initial est créé une seule fois manuellement / déjà en base.)
+    // Nouveau compte → employé actif (accès app). Création d'établissement via TypePicker.
     const email = currentUser.email ?? '';
     const fullName =
       (currentUser.user_metadata?.full_name as string) ||
@@ -159,20 +200,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!error && newMember) {
       setMember(newMember as Member);
+      setAccessRequest(null);
+      setNeedsAccess(false);
       await loadMyEstablishments(currentUser, newMember as Member);
     } else {
-      setMember(null);
-      setMyEstablishments([]);
-      setActiveEstablishment(null);
+      // Insert échoué (doublon / RLS) → recharger
+      const { data: retry } = await supabase
+        .from('members')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .maybeSingle();
+      if (retry) {
+        setMember(retry as Member);
+        setNeedsAccess(false);
+        await loadMyEstablishments(currentUser, retry as Member);
+      } else {
+        console.error('member insert failed', error);
+        setMember(null);
+        setMyEstablishments([]);
+        setActiveEstablishment(null);
+      }
     }
     setAccessRequest(null);
-    // Employé sans établissement = en attente d'affectation par l'admin
     setNeedsAccess(false);
     } catch (e) {
       console.error('loadMemberData', e);
       setMember(null);
       setMyEstablishments([]);
       setActiveEstablishment(null);
+      setNeedsAccess(false);
     }
   }
 
@@ -228,13 +284,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(login: string, password: string) {
+    const lockLeft = getLoginLockRemaining();
+    if (lockLeft > 0) {
+      return { error: `Trop de tentatives. Réessayez dans ${Math.ceil(lockLeft / 1000)} s.` };
+    }
+    if (!isSafeLogin(login)) {
+      return { error: 'Identifiant invalide.' };
+    }
     const email = toAuthEmail(login);
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
+      registerLoginFailure();
       setLoading(false);
-      return { error: error.message };
+      return { error: safeErrorMessage(error, 'Identifiants incorrects') };
     }
+    registerLoginSuccess();
     if (data.user) {
       try {
         await loadMemberData(data.user);
@@ -249,28 +314,68 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signUp(login: string, password: string, fullName: string) {
     const email = toAuthEmail(login);
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
+    setLoading(true);
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, name: fullName },
+        emailRedirectTo: window.location.origin,
+      },
+    });
+    if (error) {
+      setLoading(false);
+      return { error: error.message };
+    }
 
     if (data.user) {
-      // Toujours employé — promotion uniquement par super_admin / propriétaire
-      await supabase.from('members').insert({
-        user_id: data.user.id,
-        email,
-        full_name: fullName,
-        role: 'employee',
-        status: 'active',
-        establishment_id: null,
-      });
+      // Profil membre (ignore doublon si déjà créé)
+      await supabase.from('members').upsert(
+        {
+          user_id: data.user.id,
+          email,
+          full_name: fullName,
+          role: 'employee',
+          status: 'active',
+          establishment_id: null,
+        },
+        { onConflict: 'user_id', ignoreDuplicates: true }
+      );
+
+      // Session immédiate (autoconfirm) → entrée dans l'app
+      if (data.session) {
+        setSession(data.session);
+        setUser(data.user);
+        try {
+          await loadMemberData(data.user);
+        } finally {
+          setLoading(false);
+        }
+        return { error: null };
+      }
+
+      // Pas de session (confirmation email requise)
+      setLoading(false);
+      return {
+        error: null,
+        // message géré côté UI
+      };
     }
+    setLoading(false);
     return { error: null };
   }
 
   async function signInWithGoogle() {
-    await supabase.auth.signInWithOAuth({
+    const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: window.location.origin },
+      options: {
+        redirectTo: `${window.location.origin}/`,
+        queryParams: { access_type: 'online', prompt: 'select_account' },
+      },
     });
+    if (error) {
+      throw error;
+    }
   }
 
   async function signOut() {

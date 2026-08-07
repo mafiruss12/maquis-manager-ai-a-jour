@@ -1,7 +1,8 @@
-import { useState } from 'react';
-import { Beer, Mail, Lock, User, Loader2, Chrome } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Beer, Mail, Lock, User, Loader2, Chrome, KeyRound, ArrowLeft, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { toAuthEmail } from '@/lib/login';
+import { supabase } from '@/lib/supabase';
 
 const MARQUEE_MESSAGES = [
   'Gérez votre maquis en temps réel',
@@ -12,54 +13,115 @@ const MARQUEE_MESSAGES = [
   'Contrôle total des accès',
 ];
 
+type Mode = 'signin' | 'signup' | 'forgot';
+
+function mapAuthError(err: string): string {
+  const e = err.toLowerCase();
+  if (e.includes('invalid login credentials') || e.includes('invalid_credentials')) {
+    return 'Mot de passe incorrect ou identifiant inconnu.';
+  }
+  if (e.includes('email not confirmed')) {
+    return 'E-mail non confirmé. Vérifiez votre boîte mail.';
+  }
+  if (e.includes('user already registered')) {
+    return 'Ce compte existe déjà. Connectez-vous ou réinitialisez le mot de passe.';
+  }
+  if (e.includes('password')) {
+    return 'Mot de passe trop court (minimum 6 caractères).';
+  }
+  return err;
+}
+
 export default function AuthPage() {
   const { signIn, signUp, signInWithGoogle } = useAuth();
-  const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Erreurs renvoyées par Google / OAuth dans l'URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const err =
+      params.get('error_description') ||
+      params.get('error') ||
+      hash.get('error_description') ||
+      hash.get('error');
+    if (err) {
+      setError(
+        err.includes('access_denied')
+          ? 'Connexion Google annulée.'
+          : `Connexion Google impossible : ${decodeURIComponent(err.replace(/\+/g, ' '))}`
+      );
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setSuccess(null);
     setLoading(true);
     try {
       if (!email.trim()) {
-        setError('Identifiant requis');
-        setLoading(false);
+        setError('Identifiant ou e-mail requis');
         return;
       }
+
+      if (mode === 'forgot') {
+        const authEmail = toAuthEmail(email);
+        if (!authEmail.includes('@') || authEmail.endsWith('@maquis.local')) {
+          setError(
+            'La réinitialisation par e-mail nécessite une vraie adresse e-mail (pas un login simple type gerant1). Contactez le super admin pour réinitialiser un login local.'
+          );
+          return;
+        }
+        const redirectTo = `${window.location.origin}/`;
+        const { error: err } = await supabase.auth.resetPasswordForEmail(authEmail, { redirectTo });
+        if (err) {
+          setError(mapAuthError(err.message));
+        } else {
+          setSuccess(
+            `Un e-mail de réinitialisation a été envoyé à ${authEmail} s’il existe un compte. Vérifiez aussi les spams.`
+          );
+        }
+        return;
+      }
+
       if (mode === 'signin') {
         const { error: err } = await signIn(email, password);
         if (err) {
-          setError(err === 'Invalid login credentials' ? 'Identifiant ou mot de passe incorrect' : err);
+          setError(mapAuthError(err));
         }
-      } else {
-        if (password.length < 6) {
-          setError('Le mot de passe doit contenir au moins 6 caractères');
-          setLoading(false);
-          return;
-        }
-        // Accepte email OU simple login (gerant1 → gerant1@maquis.local)
-        const { error: err } = await signUp(toAuthEmail(email), password, fullName);
-        if (err) {
-          setError(err);
-        }
+        return;
+      }
+
+      // signup
+      if (password.length < 6) {
+        setError('Le mot de passe doit contenir au moins 6 caractères');
+        return;
+      }
+      if (!fullName.trim()) {
+        setError('Nom complet requis');
+        return;
+      }
+      const { error: err } = await signUp(email, password, fullName);
+      if (err) setError(mapAuthError(err));
+      else {
+        setSuccess('Compte créé. Si vous n\'êtes pas redirigé, connectez-vous avec le même identifiant.');
       }
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleGoogle() {
-    await signInWithGoogle();
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-amber-950/30 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Messages défilants en haut */}
       <div className="absolute top-0 left-0 right-0 h-10 bg-primary-600/90 overflow-hidden flex items-center z-20">
         <div className="flex whitespace-nowrap animate-marquee">
           {MARQUEE_MESSAGES.concat(MARQUEE_MESSAGES).map((msg, i) => (
@@ -70,14 +132,13 @@ export default function AuthPage() {
         </div>
       </div>
 
-      {/* Bulles dorées qui montent */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {Array.from({ length: 20 }).map((_, i) => (
+        {Array.from({ length: 12 }).map((_, i) => (
           <div
             key={i}
             className="absolute rounded-full bg-primary-400/10 animate-rise"
             style={{
-              left: `${(i * 5 + 3) % 100}%`,
+              left: `${(i * 8 + 3) % 100}%`,
               width: `${8 + (i % 4) * 6}px`,
               height: `${8 + (i % 4) * 6}px`,
               animationDelay: `${i * 0.8}s`,
@@ -87,36 +148,45 @@ export default function AuthPage() {
         ))}
       </div>
 
-      {/* Casiers de bière flottants en arrière-plan */}
-      <div className="absolute inset-0 pointer-events-none opacity-20">
-        {[
-          { top: '15%', left: '10%', anim: 'animate-float-slow', delay: '0s' },
-          { top: '20%', left: '80%', anim: 'animate-float-medium', delay: '1s' },
-          { top: '60%', left: '5%', anim: 'animate-float-fast', delay: '0.5s' },
-          { top: '65%', left: '85%', anim: 'animate-float-slow', delay: '2s' },
-          { top: '40%', left: '90%', anim: 'animate-swing', delay: '1.5s' },
-        ].map((pos, i) => (
-          <div
-            key={i}
-            className={`absolute ${pos.anim}`}
-            style={{ top: pos.top, left: pos.left, animationDelay: pos.delay }}
-          >
-            <Beer size={64} className="text-primary-500/40" />
-          </div>
-        ))}
-      </div>
-
-      {/* Carte de connexion */}
       <div className="relative z-10 w-full max-w-md mt-10">
         <div className="bg-stone-900/90 backdrop-blur-xl border border-stone-700/50 rounded-3xl p-8 shadow-2xl">
-          {/* Logo */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-3 shadow-lg shadow-primary-500/30">
               <Beer size={32} className="text-white" />
             </div>
             <h1 className="text-3xl font-bold font-display text-stone-100">Maquis Manager</h1>
-            <p className="text-sm text-stone-400 mt-1">Gérez votre maquis en temps réel</p>
+            <p className="text-sm text-stone-400 mt-1">
+              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gérez votre maquis en temps réel'}
+            </p>
           </div>
+
+          {/* Alertes */}
+          {error && (
+            <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-200 flex gap-2">
+              <AlertCircle size={18} className="shrink-0 mt-0.5" />
+              <div>
+                <p className="font-medium">{error}</p>
+                {mode === 'signin' && (
+                  <button
+                    type="button"
+                    className="mt-2 text-amber-300 hover:text-amber-200 underline text-xs"
+                    onClick={() => {
+                      setError(null);
+                      setMode('forgot');
+                    }}
+                  >
+                    Mot de passe oublié ? Réinitialiser par e-mail
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {success && (
+            <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 flex gap-2">
+              <CheckCircle2 size={18} className="shrink-0 mt-0.5" />
+              <p>{success}</p>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
@@ -135,8 +205,9 @@ export default function AuthPage() {
                 </div>
               </div>
             )}
+
             <div>
-              <label className="label">Identifiant ou email</label>
+              <label className="label">{mode === 'forgot' ? 'E-mail du compte' : 'Identifiant ou email'}</label>
               <div className="relative">
                 <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
                 <input
@@ -145,68 +216,120 @@ export default function AuthPage() {
                   autoComplete="username"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="ex: gerant1 ou vous@exemple.com"
-                  className="input-field pl-10"
-                />
-              </div>
-              <p className="text-xs text-stone-500 mt-1">
-                Vous pouvez utiliser un simple login (ex: caissier01) ou un email.
-              </p>
-            </div>
-            <div>
-              <label className="label">Mot de passe</label>
-              <div className="relative">
-                <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
-                <input
-                  type="password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder={mode === 'forgot' ? 'vous@exemple.com' : 'ex: gerant1 ou vous@exemple.com'}
                   className="input-field pl-10"
                 />
               </div>
             </div>
 
-            {error && (
-              <div className="bg-error-500/10 border border-error-500/30 rounded-xl p-3 text-sm text-error-300">
-                {error}
+            {mode !== 'forgot' && (
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="label mb-0">Mot de passe</label>
+                  {mode === 'signin' && (
+                    <button
+                      type="button"
+                      className="text-xs text-amber-400 hover:text-amber-300"
+                      onClick={() => {
+                        setError(null);
+                        setSuccess(null);
+                        setMode('forgot');
+                      }}
+                    >
+                      Mot de passe oublié ?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                  <input
+                    type="password"
+                    required
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="input-field pl-10"
+                    minLength={6}
+                  />
+                </div>
               </div>
             )}
 
             <button type="submit" disabled={loading} className="btn-primary w-full flex items-center justify-center gap-2">
-              {loading ? <Loader2 className="animate-spin" size={18} /> : null}
-              {mode === 'signin' ? 'Se connecter' : "S'inscrire"}
+              {loading ? (
+                <Loader2 className="animate-spin" size={18} />
+              ) : mode === 'forgot' ? (
+                <><KeyRound size={18} /> Envoyer le lien</>
+              ) : mode === 'signin' ? (
+                'Se connecter'
+              ) : (
+                "S'inscrire"
+              )}
             </button>
           </form>
 
-          {/* Séparateur */}
-          <div className="flex items-center gap-3 my-5">
-            <div className="flex-1 h-px bg-stone-700" />
-            <span className="text-xs text-stone-500">OU</span>
-            <div className="flex-1 h-px bg-stone-700" />
-          </div>
-
-          {/* Google */}
-          <button
-            onClick={handleGoogle}
-            className="w-full px-4 py-2.5 rounded-xl bg-white text-stone-800 font-semibold flex items-center justify-center gap-2 transition-all hover:bg-stone-100 active:scale-95"
-          >
-            <Chrome size={18} /> Continuer avec Google
-          </button>
-
-          <p className="text-center text-sm text-stone-400 mt-5">
-            {mode === 'signin' ? "Nouveau membre ? " : 'Déjà un compte ? '}
+          {mode === 'forgot' ? (
             <button
+              type="button"
+              className="mt-4 w-full text-sm text-stone-400 hover:text-stone-200 flex items-center justify-center gap-1"
               onClick={() => {
-                setMode(mode === 'signin' ? 'signup' : 'signin');
+                setMode('signin');
                 setError(null);
+                setSuccess(null);
               }}
-              className="font-semibold text-primary-400 hover:text-primary-300"
             >
-              {mode === 'signin' ? "S'inscrire" : 'Se connecter'}
+              <ArrowLeft size={14} /> Retour à la connexion
             </button>
-          </p>
+          ) : (
+            <>
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-stone-700" />
+                <span className="text-xs text-stone-500">ou</span>
+                <div className="h-px flex-1 bg-stone-700" />
+              </div>
+              <button
+                type="button"
+                disabled={googleLoading}
+                onClick={async () => {
+                  setError(null);
+                  setGoogleLoading(true);
+                  try {
+                    await signInWithGoogle();
+                    // Redirection Google en cours
+                  } catch (e: any) {
+                    setError(
+                      e?.message?.includes('provider')
+                        ? 'Google n\'est pas correctement configuré. Utilisez e-mail + mot de passe, ou contactez l\'admin.'
+                        : mapAuthError(e?.message || 'Connexion Google impossible')
+                    );
+                    setGoogleLoading(false);
+                  }
+                }}
+                className="w-full py-2.5 rounded-xl border border-stone-600 text-stone-200 text-sm flex items-center justify-center gap-2 hover:bg-stone-800 disabled:opacity-60"
+              >
+                {googleLoading ? <Loader2 size={16} className="animate-spin" /> : <Chrome size={16} />}
+                Continuer avec Google
+              </button>
+              <p className="text-center text-sm text-stone-400 mt-5">
+                {mode === 'signin' ? (
+                  <>
+                    Pas de compte ?{' '}
+                    <button type="button" className="text-amber-400 hover:text-amber-300" onClick={() => setMode('signup')}>
+                      S&apos;inscrire
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Déjà inscrit ?{' '}
+                    <button type="button" className="text-amber-400 hover:text-amber-300" onClick={() => setMode('signin')}>
+                      Se connecter
+                    </button>
+                  </>
+                )}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>

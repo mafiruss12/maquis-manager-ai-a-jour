@@ -70,24 +70,24 @@ export const BUSINESS_THEMES: Record<
 
 export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
   maquis: [
-    '/dashboard', '/pos', '/inventory', '/expenses', '/employees', '/team',
-    '/calendar', '/daily-report', '/statistics', '/reports', '/ai', '/chat',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/expenses', '/employees', '/team',
+    '/suivi', '/calendar', '/daily-report', '/statistics', '/reports', '/ai', '/chat',
     '/notifications', '/settings',
   ],
   bar: [
-    '/dashboard', '/pos', '/orders', '/tables', '/inventory', '/expenses',
-    '/employees', '/team', '/daily-report', '/statistics', '/ai', '/chat',
+    '/dashboard', '/pos', '/orders', '/tables', '/inventory', '/inventory/scan', '/expenses',
+    '/employees', '/team', '/suivi', '/daily-report', '/statistics', '/ai', '/chat',
     '/notifications', '/settings',
   ],
   restaurant: [
-    '/dashboard', '/pos', '/orders', '/kitchen', '/tables', '/inventory',
-    '/customers', '/employees', '/team', '/calendar', '/expenses',
+    '/dashboard', '/pos', '/orders', '/kitchen', '/tables', '/inventory', '/inventory/scan',
+    '/customers', '/employees', '/team', '/suivi', '/calendar', '/expenses',
     '/daily-report', '/statistics', '/accounting', '/ai', '/chat',
     '/notifications', '/settings',
   ],
   magasin: [
-    '/dashboard', '/pos', '/inventory', '/purchases', '/suppliers', '/customers',
-    '/expenses', '/employees', '/team', '/statistics', '/accounting', '/reports',
+    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
     '/ai', '/chat', '/notifications', '/settings',
   ],
   location_event: [

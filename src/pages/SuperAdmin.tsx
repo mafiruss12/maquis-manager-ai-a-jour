@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   UserCog, Building2, Users, Plus, Check, X, Loader2, Ban, KeyRound, Trash2, Clock, Mail,
-  RefreshCw, Copy, CheckCircle2,
+  RefreshCw, Copy, CheckCircle2, Pencil,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
@@ -14,21 +14,38 @@ type Tab = 'requests' | 'members' | 'establishments';
 
 export default function SuperAdmin() {
   const { member } = useAuth();
-  const [tab, setTab] = useState<Tab>('requests');
+  const [tab, setTab] = useState<Tab>('members');
   const [requests, setRequests] = useState<AccessRequest[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
   const [establishments, setEstablishments] = useState<Establishment[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  // Modals
   const [approveModal, setApproveModal] = useState<AccessRequest | null>(null);
   const [estModal, setEstModal] = useState(false);
   const [memberModal, setMemberModal] = useState(false);
+  const [editMember, setEditMember] = useState<Member | null>(null);
+  const [editEst, setEditEst] = useState<Establishment | null>(null);
 
-  // Forms
   const [estForm, setEstForm] = useState({ name: '', type: 'maquis', address: '', phone: '' });
-  const [approveForm, setApproveForm] = useState<{ role: Role; establishmentId: string }>({ role: 'employee', establishmentId: '' });
+  const [approveForm, setApproveForm] = useState<{ role: Role; establishmentId: string }>({
+    role: 'employee',
+    establishmentId: '',
+  });
+  const [memberEditForm, setMemberEditForm] = useState({
+    full_name: '',
+    role: 'employee' as Role,
+    establishment_id: '',
+    status: 'active' as 'active' | 'suspended',
+  });
+  const [estEditForm, setEstEditForm] = useState({
+    name: '',
+    type: 'maquis',
+    address: '',
+    phone: '',
+  });
 
   async function loadData() {
     const [reqRes, memRes, estRes] = await Promise.all([
@@ -46,22 +63,31 @@ export default function SuperAdmin() {
     loadData();
   }, []);
 
+  function flash(msg: string) {
+    setSuccess(msg);
+    setTimeout(() => setSuccess(null), 2500);
+  }
+
   async function approveRequest(req: AccessRequest) {
     if (!req.user_id || !approveForm.establishmentId) return;
     setActionLoading(req.id);
     try {
-      await supabase.from('members').insert({
-        user_id: req.user_id,
-        email: req.email,
-        full_name: req.full_name,
-        role: approveForm.role,
-        establishment_id: approveForm.establishmentId,
-        status: 'active',
-      });
+      await supabase.from('members').upsert(
+        {
+          user_id: req.user_id,
+          email: req.email,
+          full_name: req.full_name,
+          role: approveForm.role,
+          establishment_id: approveForm.establishmentId,
+          status: 'active',
+        },
+        { onConflict: 'user_id' }
+      );
       await supabase.from('access_requests').update({ status: 'approved' }).eq('id', req.id);
       setApproveModal(null);
       setApproveForm({ role: 'employee', establishmentId: '' });
       await loadData();
+      flash('Accès approuvé');
     } finally {
       setActionLoading(null);
     }
@@ -80,115 +106,237 @@ export default function SuperAdmin() {
 
   async function toggleSuspend(m: Member) {
     const newStatus = m.status === 'active' ? 'suspended' : 'active';
-    await supabase.from('members').update({ status: newStatus }).eq('id', m.id);
-    await loadData();
+    const { error: err } = await supabase.from('members').update({ status: newStatus }).eq('id', m.id);
+    if (err) setError(err.message);
+    else {
+      flash(newStatus === 'active' ? 'Compte réactivé' : 'Compte suspendu');
+      await loadData();
+      if (editMember?.id === m.id) {
+        setEditMember({ ...m, status: newStatus });
+        setMemberEditForm((f) => ({ ...f, status: newStatus }));
+      }
+    }
   }
 
   async function deleteMember(m: Member) {
-    if (!confirm(`Supprimer le compte de ${m.email} ?`)) return;
-    await supabase.from('members').delete().eq('id', m.id);
-    await loadData();
+    if (!confirm(`Supprimer le profil membre de ${m.full_name || m.email} ?`)) return;
+    const { error: err } = await supabase.from('members').delete().eq('id', m.id);
+    if (err) setError(err.message);
+    else {
+      setEditMember(null);
+      flash('Membre retiré');
+      await loadData();
+    }
+  }
+
+  async function saveMemberEdit() {
+    if (!editMember) return;
+    setActionLoading(editMember.id);
+    setError(null);
+    try {
+      const payload: Record<string, unknown> = {
+        full_name: memberEditForm.full_name || null,
+        role: memberEditForm.role,
+        status: memberEditForm.status,
+        establishment_id: memberEditForm.establishment_id || null,
+      };
+      // Ne pas rétrograder le super_admin courant
+      if (editMember.role === 'super_admin') {
+        payload.role = 'super_admin';
+      }
+      const { error: err } = await supabase.from('members').update(payload).eq('id', editMember.id);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      if (memberEditForm.establishment_id && editMember.user_id) {
+        await supabase.from('member_establishments').upsert(
+          {
+            user_id: editMember.user_id,
+            establishment_id: memberEditForm.establishment_id,
+            role: memberEditForm.role,
+            status: 'active',
+          },
+          { onConflict: 'user_id,establishment_id' }
+        );
+      }
+      flash('Accès mis à jour');
+      setEditMember(null);
+      await loadData();
+    } finally {
+      setActionLoading(null);
+    }
   }
 
   async function createEstablishment() {
     if (!estForm.name || !member) return;
-    await supabase.from('establishments').insert({
+    const { error: err } = await supabase.from('establishments').insert({
       name: estForm.name,
       type: estForm.type,
-      address: estForm.address,
-      phone: estForm.phone,
+      address: estForm.address || null,
+      phone: estForm.phone || null,
       created_by: member.user_id,
     });
-    setEstModal(false);
-    setEstForm({ name: '', type: 'maquis', address: '', phone: '' });
+    if (err) setError(err.message);
+    else {
+      setEstModal(false);
+      setEstForm({ name: '', type: 'maquis', address: '', phone: '' });
+      flash('Établissement créé');
+      await loadData();
+    }
+  }
+
+  async function saveEstEdit() {
+    if (!editEst) return;
+    setActionLoading(editEst.id);
+    setError(null);
+    try {
+      const { error: err } = await supabase
+        .from('establishments')
+        .update({
+          name: estEditForm.name,
+          type: estEditForm.type,
+          address: estEditForm.address || null,
+          phone: estEditForm.phone || null,
+        })
+        .eq('id', editEst.id);
+      if (err) {
+        setError(err.message);
+        return;
+      }
+      flash('Établissement mis à jour');
+      setEditEst(null);
+      await loadData();
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function removeMemberFromEst(m: Member) {
+    if (!editEst) return;
+    if (!confirm(`Retirer ${m.full_name || m.email} de ${editEst.name} ?`)) return;
+    await supabase.from('members').update({ establishment_id: null }).eq('id', m.id);
     await loadData();
+    flash('Membre retiré de l\'établissement');
+  }
+
+  async function deleteEstablishment(est: Establishment) {
+    const count = members.filter((m) => m.establishment_id === est.id).length;
+    if (count > 0) {
+      alert(`Impossible de supprimer : ${count} membre(s) encore rattaché(s). Retirez-les d'abord.`);
+      return;
+    }
+    if (!confirm(`Supprimer l'établissement « ${est.name} » ?`)) return;
+    const { error: err } = await supabase.from('establishments').delete().eq('id', est.id);
+    if (err) setError(err.message);
+    else {
+      setEditEst(null);
+      flash('Établissement supprimé');
+      await loadData();
+    }
+  }
+
+  function openEditMember(m: Member) {
+    setError(null);
+    setEditMember(m);
+    setMemberEditForm({
+      full_name: m.full_name || '',
+      role: m.role,
+      establishment_id: m.establishment_id || '',
+      status: m.status === 'suspended' ? 'suspended' : 'active',
+    });
+  }
+
+  function openEditEst(est: Establishment) {
+    setError(null);
+    setEditEst(est);
+    setEstEditForm({
+      name: est.name,
+      type: est.type || 'maquis',
+      address: est.address || '',
+      phone: est.phone || '',
+    });
   }
 
   if (member?.role !== 'super_admin') {
-    return <EmptyState icon={<UserCog size={48} />} title="Accès refusé" message="Cette section est réservée au Super Administrateur." />;
+    return (
+      <EmptyState
+        icon={<UserCog size={48} />}
+        title="Accès refusé"
+        message="Cette section est réservée au Super Administrateur."
+      />
+    );
   }
 
-  if (loading) return <div className="flex items-center justify-center py-20 text-stone-400">Chargement...</div>;
+  if (loading) {
+    return <div className="flex items-center justify-center py-20 text-stone-400">Chargement...</div>;
+  }
 
   const pendingCount = requests.length;
+  const estMembers = editEst ? members.filter((m) => m.establishment_id === editEst.id) : [];
 
   return (
     <div>
       <h1 className="text-2xl font-bold font-display text-stone-100 mb-2">Administration</h1>
-      <p className="text-stone-400 text-sm mb-6">Gérez les accès, établissements et utilisateurs</p>
+      <p className="text-stone-400 text-sm mb-4">
+        Cliquez sur un membre ou un établissement pour le modifier
+      </p>
 
-      {/* Tabs */}
+      {error && (
+        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200">{error}</div>
+      )}
+      {success && (
+        <div className="mb-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-200">{success}</div>
+      )}
+
       <div className="flex gap-2 mb-6 overflow-x-auto">
-        <button
-          onClick={() => setTab('requests')}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            tab === 'requests' ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
-          }`}
-        >
-          <Clock size={16} /> Demandes {pendingCount > 0 && <Badge color="warning">{pendingCount}</Badge>}
-        </button>
-        <button
-          onClick={() => setTab('members')}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            tab === 'members' ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
-          }`}
-        >
-          <Users size={16} /> Membres
-        </button>
-        <button
-          onClick={() => setTab('establishments')}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
-            tab === 'establishments' ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
-          }`}
-        >
-          <Building2 size={16} /> Établissements
-        </button>
+        {(
+          [
+            ['requests', <Clock size={16} key="c" />, 'Demandes'],
+            ['members', <Users size={16} key="u" />, 'Membres'],
+            ['establishments', <Building2 size={16} key="b" />, 'Établissements'],
+          ] as const
+        ).map(([id, icon, label]) => (
+          <button
+            key={id}
+            onClick={() => setTab(id)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 whitespace-nowrap ${
+              tab === id ? 'bg-primary-500/15 text-primary-300' : 'text-stone-400 hover:bg-stone-800'
+            }`}
+          >
+            {icon} {label}
+            {id === 'requests' && pendingCount > 0 && <Badge color="warning">{pendingCount}</Badge>}
+          </button>
+        ))}
       </div>
 
-      {/* Tab: Requests */}
       {tab === 'requests' && (
         <div>
-          {pendingCount > 0 && (
-            <div className="bg-warning-500/10 border border-warning-500/30 rounded-xl p-4 mb-4">
-              <p className="text-sm text-warning-300 font-medium">
-                {pendingCount} demande{pendingCount > 1 ? 's' : ''} d'accès en attente de validation
-              </p>
-            </div>
-          )}
           {requests.length === 0 ? (
-            <EmptyState icon={<Check size={48} />} title="Aucune demande en attente" message="Toutes les demandes ont été traitées." />
+            <EmptyState icon={<Clock size={48} />} title="Aucune demande" message="Les inscriptions en attente apparaîtront ici." />
           ) : (
             <div className="space-y-2">
               {requests.map((req) => (
                 <div key={req.id} className="card flex items-center gap-4">
-                  <div className="p-2.5 rounded-xl bg-warning-500/10">
-                    <Clock size={20} className="text-warning-400" />
+                  <div className="p-2.5 rounded-xl bg-amber-500/15">
+                    <Mail size={20} className="text-amber-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-stone-100">{req.full_name ?? 'Sans nom'}</p>
-                    <p className="text-sm text-stone-400 flex items-center gap-2">
-                      <Mail size={12} /> {req.email}
-                      <Badge color="neutral">{req.auth_provider === 'google' ? 'Google' : 'Email'}</Badge>
-                    </p>
+                    <p className="font-medium text-stone-100 truncate">{req.full_name || req.email}</p>
+                    <p className="text-sm text-stone-400">{req.email}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        setApproveForm({ role: 'employee', establishmentId: '' });
-                        setApproveModal(req);
-                      }}
-                      className="btn-primary px-3 py-2 flex items-center gap-1"
-                    >
-                      <Check size={16} /> Approuver
-                    </button>
-                    <button
-                      onClick={() => rejectRequest(req)}
-                      disabled={actionLoading === req.id}
-                      className="btn-danger px-3 py-2 flex items-center gap-1"
-                    >
-                      <X size={16} /> Refuser
-                    </button>
-                  </div>
+                  <button
+                    onClick={() => {
+                      setApproveModal(req);
+                      setApproveForm({ role: 'employee', establishmentId: establishments[0]?.id || '' });
+                    }}
+                    className="btn-primary text-xs py-2"
+                  >
+                    Approuver
+                  </button>
+                  <button onClick={() => rejectRequest(req)} className="btn-ghost text-xs text-red-400">
+                    Refuser
+                  </button>
                 </div>
               ))}
             </div>
@@ -196,7 +344,6 @@ export default function SuperAdmin() {
         </div>
       )}
 
-      {/* Tab: Members */}
       {tab === 'members' && (
         <div>
           <div className="flex justify-end mb-4">
@@ -211,12 +358,17 @@ export default function SuperAdmin() {
               {members.map((m) => {
                 const est = establishments.find((e) => e.id === m.establishment_id);
                 return (
-                  <div key={m.id} className="card flex items-center gap-4">
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => openEditMember(m)}
+                    className="card w-full flex items-center gap-4 text-left hover:border-primary-500/40 transition-colors cursor-pointer"
+                  >
                     <div className="p-2.5 rounded-xl bg-stone-800">
                       <Users size={20} className="text-stone-400" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <p className="font-medium text-stone-100 truncate">{m.full_name ?? m.email}</p>
                         <Badge color={m.status === 'active' ? 'success' : 'error'}>
                           {m.status === 'active' ? 'Actif' : 'Suspendu'}
@@ -226,25 +378,8 @@ export default function SuperAdmin() {
                         {displayLogin(m.email)} · {ROLE_LABELS[m.role]} · {est?.name ?? 'Aucun établissement'}
                       </p>
                     </div>
-                    {m.role !== 'super_admin' && (
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => toggleSuspend(m)}
-                          className="p-2 rounded-lg hover:bg-stone-800 text-stone-400 hover:text-warning-400"
-                          title={m.status === 'active' ? 'Suspendre' : 'Réactiver'}
-                        >
-                          <Ban size={18} />
-                        </button>
-                        <button
-                          onClick={() => deleteMember(m)}
-                          className="p-2 rounded-lg hover:bg-error-500/10 text-stone-400 hover:text-error-400"
-                          title="Supprimer"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                    <Pencil size={16} className="text-stone-500 shrink-0" />
+                  </button>
                 );
               })}
             </div>
@@ -252,7 +387,6 @@ export default function SuperAdmin() {
         </div>
       )}
 
-      {/* Tab: Establishments */}
       {tab === 'establishments' && (
         <div>
           <div className="flex justify-end mb-4">
@@ -261,26 +395,32 @@ export default function SuperAdmin() {
             </button>
           </div>
           {establishments.length === 0 ? (
-            <EmptyState icon={<Building2 size={48} />} title="Aucun établissement" message="Créez votre premier établissement." />
+            <EmptyState icon={<Building2 size={48} />} title="Aucun établissement" message="Créez le premier." />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid sm:grid-cols-2 gap-3">
               {establishments.map((est) => {
-                const memberCount = members.filter((m) => m.establishment_id === est.id).length;
+                const count = members.filter((m) => m.establishment_id === est.id).length;
                 return (
-                  <div key={est.id} className="card">
+                  <button
+                    key={est.id}
+                    type="button"
+                    onClick={() => openEditEst(est)}
+                    className="card text-left hover:border-primary-500/40 transition-colors cursor-pointer"
+                  >
                     <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-secondary-500/10">
-                        <Building2 size={20} className="text-secondary-400" />
+                      <div className="p-2.5 rounded-xl bg-sky-500/15">
+                        <Building2 size={20} className="text-sky-400" />
                       </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-stone-100">{est.name}</p>
-                        <p className="text-sm text-stone-400">{est.type}</p>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-stone-100">{est.name}</p>
+                        <p className="text-sm text-stone-400">{est.type || 'maquis'}</p>
                         {est.address && <p className="text-xs text-stone-500 mt-1">{est.address}</p>}
                         {est.phone && <p className="text-xs text-stone-500">{est.phone}</p>}
-                        <p className="text-xs text-stone-500 mt-2">{memberCount} membre{memberCount > 1 ? 's' : ''}</p>
+                        <p className="text-xs text-stone-500 mt-2">{count} membre{count > 1 ? 's' : ''}</p>
                       </div>
+                      <Pencil size={16} className="text-stone-500" />
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>
@@ -288,14 +428,11 @@ export default function SuperAdmin() {
         </div>
       )}
 
-      {/* Modal: Approve request */}
+      {/* Approve request */}
       <Modal open={!!approveModal} onClose={() => setApproveModal(null)} title="Approuver la demande">
         {approveModal && (
-          <div className="space-y-4">
-            <div className="bg-stone-800/50 rounded-xl p-3">
-              <p className="text-sm text-stone-400">{approveModal.full_name ?? 'Sans nom'}</p>
-              <p className="text-stone-200">{approveModal.email}</p>
-            </div>
+          <div className="space-y-3">
+            <p className="text-sm text-stone-300">{approveModal.full_name || approveModal.email}</p>
             <div>
               <label className="label">Rôle</label>
               <select
@@ -303,9 +440,13 @@ export default function SuperAdmin() {
                 onChange={(e) => setApproveForm({ ...approveForm, role: e.target.value as Role })}
                 className="input-field"
               >
-                {(Object.keys(ROLE_LABELS) as Role[]).filter((r) => r !== 'super_admin').map((r) => (
-                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                ))}
+                {(Object.keys(ROLE_LABELS) as Role[])
+                  .filter((r) => r !== 'super_admin')
+                  .map((r) => (
+                    <option key={r} value={r}>
+                      {ROLE_LABELS[r]}
+                    </option>
+                  ))}
               </select>
             </div>
             <div>
@@ -317,7 +458,9 @@ export default function SuperAdmin() {
               >
                 <option value="">— Choisir —</option>
                 {establishments.map((est) => (
-                  <option key={est.id} value={est.id}>{est.name}</option>
+                  <option key={est.id} value={est.id}>
+                    {est.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -327,22 +470,31 @@ export default function SuperAdmin() {
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               {actionLoading === approveModal.id ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
-              Confirmer l'accès
+              Confirmer l&apos;accès
             </button>
           </div>
         )}
       </Modal>
 
-      {/* Modal: Create establishment */}
+      {/* Create establishment */}
       <Modal open={estModal} onClose={() => setEstModal(false)} title="Nouvel établissement">
         <div className="space-y-3">
           <div>
             <label className="label">Nom</label>
-            <input value={estForm.name} onChange={(e) => setEstForm({ ...estForm, name: e.target.value })} className="input-field" placeholder="Maquis Le Comptoir" />
+            <input
+              value={estForm.name}
+              onChange={(e) => setEstForm({ ...estForm, name: e.target.value })}
+              className="input-field"
+              placeholder="Maquis Le Comptoir"
+            />
           </div>
           <div>
             <label className="label">Type</label>
-            <select value={estForm.type} onChange={(e) => setEstForm({ ...estForm, type: e.target.value })} className="input-field">
+            <select
+              value={estForm.type}
+              onChange={(e) => setEstForm({ ...estForm, type: e.target.value })}
+              className="input-field"
+            >
               <option value="maquis">Maquis</option>
               <option value="restaurant">Restaurant</option>
               <option value="bar">Bar</option>
@@ -352,23 +504,234 @@ export default function SuperAdmin() {
           </div>
           <div>
             <label className="label">Adresse</label>
-            <input value={estForm.address} onChange={(e) => setEstForm({ ...estForm, address: e.target.value })} className="input-field" placeholder="Cocody, Abidjan" />
+            <input
+              value={estForm.address}
+              onChange={(e) => setEstForm({ ...estForm, address: e.target.value })}
+              className="input-field"
+            />
           </div>
           <div>
             <label className="label">Téléphone</label>
-            <input value={estForm.phone} onChange={(e) => setEstForm({ ...estForm, phone: e.target.value })} className="input-field" placeholder="+225 ..." />
+            <input
+              value={estForm.phone}
+              onChange={(e) => setEstForm({ ...estForm, phone: e.target.value })}
+              className="input-field"
+            />
           </div>
-          <button onClick={createEstablishment} className="btn-primary w-full">Créer</button>
+          <button onClick={createEstablishment} className="btn-primary w-full">
+            Créer
+          </button>
         </div>
       </Modal>
 
-      {/* Modal: Create member (direct access) */}
+      {/* Edit member */}
+      <Modal open={!!editMember} onClose={() => setEditMember(null)} title="Modifier l'accès">
+        {editMember && (
+          <div className="space-y-3">
+            <p className="text-xs text-stone-500 font-mono">{displayLogin(editMember.email)}</p>
+            <div>
+              <label className="label">Nom complet</label>
+              <input
+                value={memberEditForm.full_name}
+                onChange={(e) => setMemberEditForm({ ...memberEditForm, full_name: e.target.value })}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label">Rôle</label>
+              <select
+                value={memberEditForm.role}
+                onChange={(e) => setMemberEditForm({ ...memberEditForm, role: e.target.value as Role })}
+                className="input-field"
+                disabled={editMember.role === 'super_admin'}
+              >
+                {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
+                  <option key={r} value={r}>
+                    {ROLE_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Établissement</label>
+              <select
+                value={memberEditForm.establishment_id}
+                onChange={(e) => setMemberEditForm({ ...memberEditForm, establishment_id: e.target.value })}
+                className="input-field"
+              >
+                <option value="">— Aucun —</option>
+                {establishments.map((est) => (
+                  <option key={est.id} value={est.id}>
+                    {est.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Statut</label>
+              <select
+                value={memberEditForm.status}
+                onChange={(e) =>
+                  setMemberEditForm({
+                    ...memberEditForm,
+                    status: e.target.value as 'active' | 'suspended',
+                  })
+                }
+                className="input-field"
+                disabled={editMember.role === 'super_admin'}
+              >
+                <option value="active">Actif</option>
+                <option value="suspended">Suspendu</option>
+              </select>
+            </div>
+            <button
+              onClick={saveMemberEdit}
+              disabled={actionLoading === editMember.id}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {actionLoading === editMember.id ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+              Enregistrer
+            </button>
+            {editMember.role !== 'super_admin' && (
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => toggleSuspend(editMember)}
+                  className="btn-secondary flex-1 text-sm flex items-center justify-center gap-1"
+                >
+                  <Ban size={14} /> {editMember.status === 'active' ? 'Suspendre' : 'Réactiver'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deleteMember(editMember)}
+                  className="btn-ghost text-sm text-red-400 flex items-center gap-1"
+                >
+                  <Trash2 size={14} /> Supprimer
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+
+      {/* Edit establishment */}
+      <Modal open={!!editEst} onClose={() => setEditEst(null)} title="Modifier l'établissement">
+        {editEst && (
+          <div className="space-y-3">
+            <div>
+              <label className="label">Nom</label>
+              <input
+                value={estEditForm.name}
+                onChange={(e) => setEstEditForm({ ...estEditForm, name: e.target.value })}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label">Type</label>
+              <select
+                value={estEditForm.type}
+                onChange={(e) => setEstEditForm({ ...estEditForm, type: e.target.value })}
+                className="input-field"
+              >
+                <option value="maquis">Maquis</option>
+                <option value="restaurant">Restaurant</option>
+                <option value="bar">Bar</option>
+                <option value="magasin">Magasin</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">Adresse</label>
+              <input
+                value={estEditForm.address}
+                onChange={(e) => setEstEditForm({ ...estEditForm, address: e.target.value })}
+                className="input-field"
+              />
+            </div>
+            <div>
+              <label className="label">Téléphone</label>
+              <input
+                value={estEditForm.phone}
+                onChange={(e) => setEstEditForm({ ...estEditForm, phone: e.target.value })}
+                className="input-field"
+              />
+            </div>
+            <button
+              onClick={saveEstEdit}
+              disabled={actionLoading === editEst.id || !estEditForm.name.trim()}
+              className="btn-primary w-full flex items-center justify-center gap-2"
+            >
+              {actionLoading === editEst.id ? <Loader2 className="animate-spin" size={18} /> : <Check size={18} />}
+              Enregistrer
+            </button>
+
+            <div className="pt-2 border-t border-stone-800">
+              <p className="text-sm font-medium text-stone-200 mb-2">
+                Membres rattachés ({estMembers.length})
+              </p>
+              {estMembers.length === 0 ? (
+                <p className="text-xs text-stone-500">Aucun membre. Créez un accès ou assignez un membre existant.</p>
+              ) : (
+                <ul className="space-y-2 max-h-48 overflow-y-auto">
+                  {estMembers.map((m) => (
+                    <li
+                      key={m.id}
+                      className="flex items-center justify-between text-sm bg-stone-800/50 rounded-lg px-3 py-2"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-stone-200 truncate">{m.full_name || displayLogin(m.email)}</p>
+                        <p className="text-xs text-stone-500">{ROLE_LABELS[m.role]}</p>
+                      </div>
+                      <div className="flex gap-1">
+                        <button
+                          type="button"
+                          className="text-xs text-amber-400 hover:underline px-1"
+                          onClick={() => {
+                            setEditEst(null);
+                            openEditMember(m);
+                          }}
+                        >
+                          Éditer
+                        </button>
+                        {m.role !== 'super_admin' && (
+                          <button
+                            type="button"
+                            className="text-xs text-red-400 hover:underline px-1"
+                            onClick={() => removeMemberFromEst(m)}
+                          >
+                            Retirer
+                          </button>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => deleteEstablishment(editEst)}
+              className="btn-ghost w-full text-sm text-red-400 flex items-center justify-center gap-1"
+            >
+              <Trash2 size={14} /> Supprimer l&apos;établissement
+            </button>
+          </div>
+        )}
+      </Modal>
+
       <Modal open={memberModal} onClose={() => setMemberModal(false)} title="Créer un accès direct">
-        <DirectAccessForm establishments={establishments} onDone={() => { setMemberModal(false); loadData(); }} />
+        <DirectAccessForm
+          establishments={establishments}
+          onDone={() => {
+            setMemberModal(false);
+            loadData();
+          }}
+        />
       </Modal>
     </div>
   );
 }
+
 
 function DirectAccessForm({ establishments, onDone }: { establishments: Establishment[]; onDone: () => void }) {
   const { member } = useAuth();

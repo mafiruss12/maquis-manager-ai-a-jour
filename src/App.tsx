@@ -5,6 +5,7 @@ import PendingAccessPage from '@/pages/PendingAccessPage';
 import Dashboard from '@/pages/Dashboard';
 import Caisse from '@/pages/Caisse';
 import Inventaire from '@/pages/Inventaire';
+import ScanInventaire from '@/pages/ScanInventaire';
 import DailyReportPage from '@/pages/DailyReport';
 import SuperAdmin from '@/pages/SuperAdmin';
 import Employees from '@/pages/Employees';
@@ -23,6 +24,7 @@ import SettingsPage from '@/pages/Settings';
 import AIAssistant from '@/pages/AIAssistant';
 import CalendarPage from '@/pages/CalendarPage';
 import ChatPage from '@/pages/Chat';
+import SuiviGerant from '@/pages/SuiviGerant';
 import TeamPage from '@/pages/Team';
 import RentDashboard from '@/pages/rent/Dashboard';
 import RentEquipment from '@/pages/rent/Equipment';
@@ -114,6 +116,7 @@ function ProtectedRoutes() {
         <Route path="/orders" element={<Orders />} />
         <Route path="/kitchen" element={<Kitchen />} />
         <Route path="/inventory" element={<Inventaire />} />
+        <Route path="/inventory/scan" element={<ScanInventaire />} />
         <Route path="/inventaire" element={<Navigate to="/inventory" replace />} />
         <Route path="/tables" element={<Tables />} />
         <Route path="/employees" element={<Employees />} />
@@ -129,6 +132,8 @@ function ProtectedRoutes() {
         <Route path="/cloture" element={<Navigate to="/daily-report" replace />} />
         <Route path="/ai" element={<AIAssistant />} />
         <Route path="/chat" element={<ChatPage />} />
+        <Route path="/suivi" element={<SuiviGerant />} />
+        <Route path="/suivi-gerant" element={<SuiviGerant />} />
         <Route path="/notifications" element={<Notifications />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/team" element={<TeamPage />} />

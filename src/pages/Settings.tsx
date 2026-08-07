@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Building2, User, Save, CheckCircle2, Camera, Plus } from 'lucide-react';
+import { Building2, User, Save, CheckCircle2, Camera, Plus, Lock, KeyRound} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
+import { APP_VERSION, fetchLatestRelease, isNewerVersion } from '@/lib/appVersion';
 import type { Establishment } from '@/lib/types';
 import { ROLE_LABELS } from '@/lib/types';
 
@@ -11,6 +12,10 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [pwdForm, setPwdForm] = useState({ password: '', confirm: '' });
+  const [pwdMsg, setPwdMsg] = useState<string | null>(null);
+  const [pwdErr, setPwdErr] = useState<string | null>(null);
+  const [pwdSaving, setPwdSaving] = useState(false);
   const [profileForm, setProfileForm] = useState({ full_name: '', avatar_url: '' });
   const [form, setForm] = useState({ name: '', type: 'maquis', address: '', phone: '', logo_url: '' });
   const [error, setError] = useState<string | null>(null);
@@ -66,6 +71,29 @@ export default function SettingsPage() {
       setTimeout(() => setSaved(false), 2500);
     }
     setSaving(false);
+  }
+
+  
+  async function changePassword() {
+    setPwdErr(null);
+    setPwdMsg(null);
+    if (pwdForm.password.length < 6) {
+      setPwdErr('Le mot de passe doit contenir au moins 6 caractères.');
+      return;
+    }
+    if (pwdForm.password !== pwdForm.confirm) {
+      setPwdErr('Les mots de passe ne correspondent pas.');
+      return;
+    }
+    setPwdSaving(true);
+    const { error: err } = await supabase.auth.updateUser({ password: pwdForm.password });
+    setPwdSaving(false);
+    if (err) setPwdErr(err.message);
+    else {
+      setPwdMsg('Mot de passe mis à jour.');
+      setPwdForm({ password: '', confirm: '' });
+      setTimeout(() => setPwdMsg(null), 3000);
+    }
   }
 
   async function saveEstablishment() {
@@ -190,6 +218,52 @@ export default function SettingsPage() {
           </div>
         </div>
 
+        {/* Mot de passe */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-stone-100 mb-4 flex items-center gap-2">
+            <KeyRound size={20} className="text-amber-400" /> Sécurité — Mot de passe
+          </h2>
+          {pwdErr && (
+            <div className="mb-3 rounded-xl border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-200">{pwdErr}</div>
+          )}
+          {pwdMsg && (
+            <div className="mb-3 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">{pwdMsg}</div>
+          )}
+          <div className="space-y-3">
+            <div>
+              <label className="label">Nouveau mot de passe</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                <input
+                  type="password"
+                  value={pwdForm.password}
+                  onChange={(e) => setPwdForm({ ...pwdForm, password: e.target.value })}
+                  className="input-field pl-10"
+                  placeholder="Min. 6 caractères"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="label">Confirmer</label>
+              <div className="relative">
+                <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
+                <input
+                  type="password"
+                  value={pwdForm.confirm}
+                  onChange={(e) => setPwdForm({ ...pwdForm, confirm: e.target.value })}
+                  className="input-field pl-10"
+                  placeholder="Retapez le mot de passe"
+                  autoComplete="new-password"
+                />
+              </div>
+            </div>
+            <button onClick={changePassword} disabled={pwdSaving} className="btn-primary w-full flex items-center justify-center gap-2">
+              {pwdSaving ? 'Enregistrement…' : 'Changer le mot de passe'}
+            </button>
+          </div>
+        </div>
+
         {/* Établissement */}
         <div className="card">
           <h2 className="text-lg font-semibold text-stone-100 mb-4 flex items-center gap-2">
@@ -294,6 +368,34 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Version app */}
+        <div className="card">
+          <h2 className="text-lg font-semibold text-stone-100 mb-2">Application mobile</h2>
+          <p className="text-sm text-stone-400">Version installée (APK) : <span className="text-stone-200 font-mono">v{APP_VERSION}</span></p>
+          <p className="text-xs text-stone-500 mt-1">Les nouveautés du site s&apos;appliquent automatiquement. Une nouvelle APK n&apos;est nécessaire que pour l&apos;icône ou la coque Android.</p>
+          <button
+            type="button"
+            className="btn-secondary mt-3 text-sm"
+            onClick={async () => {
+              const latest = await fetchLatestRelease();
+              if (!latest) {
+                alert('Impossible de vérifier les mises à jour pour le moment.');
+                return;
+              }
+              if (isNewerVersion(latest.tag)) {
+                if (confirm(`Nouvelle version v${latest.tag} disponible. Télécharger ?`)) {
+                  window.open(latest.apkUrl || latest.htmlUrl, '_blank');
+                }
+              } else {
+                alert(`Vous êtes à jour (v${APP_VERSION}).`);
+              }
+            }}
+          >
+            Vérifier les mises à jour APK
+          </button>
+        </div>
+
       </div>
     </div>
   );
