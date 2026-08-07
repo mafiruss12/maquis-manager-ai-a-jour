@@ -32,15 +32,18 @@ export function Modal({
 
 export function StatCard({
   label,
+  title,
   value,
   icon,
   accent = 'primary',
 }: {
-  label: string;
+  label?: string;
+  title?: string;
   value: string;
   icon: ReactNode;
   accent?: 'primary' | 'success' | 'error' | 'warning' | 'secondary';
 }) {
+  const displayLabel = label || title || '';
   const accentMap: Record<string, string> = {
     primary: 'text-primary-400 bg-primary-500/10',
     success: 'text-success-400 bg-success-500/10',
@@ -52,7 +55,7 @@ export function StatCard({
     <div className="card flex items-center gap-4">
       <div className={`p-3 rounded-xl ${accentMap[accent]}`}>{icon}</div>
       <div>
-        <p className="text-sm text-stone-400">{label}</p>
+        <p className="text-sm text-stone-400">{displayLabel}</p>
         <p className="text-2xl font-bold font-display text-stone-100">{value}</p>
       </div>
     </div>

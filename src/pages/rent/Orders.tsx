@@ -19,6 +19,10 @@ export default function RentOrders() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [waLink, setWaLink] = useState<string | null>(null);
+  const [editOrder, setEditOrder] = useState<RentalOrder | null>(null);
+  const [editStatus, setEditStatus] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editPaid, setEditPaid] = useState(0);
 
   const [clientId, setClientId] = useState('');
   const [eventDate, setEventDate] = useState('');
@@ -158,6 +162,27 @@ export default function RentOrders() {
     await load();
   }
 
+
+  async function saveEditOrder() {
+    if (!editOrder) return;
+    setSaving(true);
+    const { error: err } = await supabase
+      .from('rental_orders')
+      .update({
+        status: editStatus || editOrder.status,
+        notes: editNotes || null,
+        paid_amount: Number(editPaid) || 0,
+      })
+      .eq('id', editOrder.id);
+    setSaving(false);
+    if (err) {
+      setError(err.message);
+      return;
+    }
+    setEditOrder(null);
+    await load();
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-20">
@@ -196,12 +221,23 @@ export default function RentOrders() {
       ) : (
         <div className="space-y-2">
           {orders.map((o) => (
-            <div key={o.id} className="card">
+            <button
+              type="button"
+              key={o.id}
+              className="card w-full text-left active:scale-[0.99]"
+              onClick={() => {
+                setEditOrder(o);
+                setEditStatus(o.status);
+                setEditNotes(o.notes || '');
+                setEditPaid(Number(o.paid_amount) || 0);
+                setError(null);
+              }}
+            >
               <div className="flex flex-wrap items-start gap-2 justify-between">
                 <div>
                   <p className="font-medium text-stone-100">{o.client_name || 'Sans client'}</p>
                   <p className="text-xs text-stone-500">
-                    Événement {o.event_date || '—'} · Retour {o.return_date || '—'}
+                    Événement {o.event_date || '—'} · Retour {o.return_date || '—'} · Toucher pour modifier
                   </p>
                 </div>
                 <Badge color={statusColor(o.status) as any}>{RENTAL_STATUS_LABELS[o.status] || o.status}</Badge>
@@ -219,12 +255,13 @@ export default function RentOrders() {
                   )}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="inline-flex items-center gap-1 text-sm text-success-400 mt-2"
                 >
                   <MessageCircle size={14} /> WhatsApp client
                 </a>
               )}
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -305,6 +342,39 @@ export default function RentOrders() {
           </button>
         </div>
       </Modal>
+
+      <Modal open={!!editOrder} onClose={() => setEditOrder(null)} title="Modifier la commande">
+        {editOrder && (
+          <div className="space-y-3">
+            {error && (
+              <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">{error}</div>
+            )}
+            <p className="text-sm text-stone-400">
+              {editOrder.client_name} · Événement {editOrder.event_date || '—'}
+            </p>
+            <div>
+              <label className="label">Statut</label>
+              <select className="input-field" value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                {Object.entries(RENTAL_STATUS_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="label">Montant payé (FCFA)</label>
+              <input type="number" min={0} className="input-field" value={editPaid} onChange={(e) => setEditPaid(Number(e.target.value))} />
+            </div>
+            <div>
+              <label className="label">Notes</label>
+              <input className="input-field" value={editNotes} onChange={(e) => setEditNotes(e.target.value)} />
+            </div>
+            <button type="button" onClick={saveEditOrder} disabled={saving} className="btn-primary w-full">
+              {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Enregistrer'}
+            </button>
+          </div>
+        )}
+      </Modal>
+
     </div>
   );
 }

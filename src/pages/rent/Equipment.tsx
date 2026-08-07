@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Package, Plus, Loader2, Minus, Trash2 } from 'lucide-react';
+import { Package, Plus, Loader2, Minus, Trash2, Pencil } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { formatFCFA } from '@/lib/format';
@@ -10,18 +10,25 @@ import {
 } from '@/lib/businessTypes';
 import type { RentalEquipment } from '@/lib/rentalTypes';
 
+const emptyForm = {
+  name: '',
+  category: 'chaises',
+  qty_total: 0,
+  qty_available: 0,
+  qty_reserved: 0,
+  qty_out: 0,
+  qty_damaged: 0,
+  unit_price: 0,
+  description: '',
+};
+
 export default function RentEquipment() {
   const { member } = useAuth();
   const [items, setItems] = useState<RentalEquipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({
-    name: '',
-    category: 'chaises',
-    qty_total: 0,
-    unit_price: 0,
-    description: '',
-  });
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,7 +52,33 @@ export default function RentEquipment() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [member?.establishment_id]);
 
-  async function adjustQty(it: RentalEquipment, delta: number) {
+  function openCreate() {
+    setEditId(null);
+    setForm(emptyForm);
+    setError(null);
+    setOpen(true);
+  }
+
+  function openEdit(it: RentalEquipment, e?: React.MouseEvent) {
+    e?.stopPropagation();
+    setEditId(it.id);
+    setForm({
+      name: it.name,
+      category: it.category || 'chaises',
+      qty_total: Number(it.qty_total) || 0,
+      qty_available: Number(it.qty_available) || 0,
+      qty_reserved: Number(it.qty_reserved) || 0,
+      qty_out: Number(it.qty_out) || 0,
+      qty_damaged: Number(it.qty_damaged) || 0,
+      unit_price: Number(it.unit_price) || 0,
+      description: it.description || '',
+    });
+    setError(null);
+    setOpen(true);
+  }
+
+  async function adjustQty(it: RentalEquipment, delta: number, e: React.MouseEvent) {
+    e.stopPropagation();
     const newTotal = Math.max(0, Number(it.qty_total) + delta);
     const diff = newTotal - Number(it.qty_total);
     const newAvail = Math.max(0, Number(it.qty_available) + diff);
@@ -57,36 +90,50 @@ export default function RentEquipment() {
     else await load();
   }
 
-  async function removeItem(it: RentalEquipment) {
+  async function removeItem(it: RentalEquipment, e: React.MouseEvent) {
+    e.stopPropagation();
     if (!confirm(`Supprimer ${it.name} ?`)) return;
     await supabase.from('rental_equipment').delete().eq('id', it.id);
     await load();
   }
 
   async function save() {
-    if (!member?.establishment_id || !form.name.trim()) return;
+    if (!member?.establishment_id || !form.name.trim()) {
+      setError('Le nom est obligatoire');
+      return;
+    }
     setSaving(true);
     setError(null);
-    const qty = Math.max(0, Number(form.qty_total) || 0);
-    const { error: err } = await supabase.from('rental_equipment').insert({
-      establishment_id: member.establishment_id,
+    const payload = {
       name: form.name.trim(),
       category: form.category,
       description: form.description || null,
-      qty_total: qty,
-      qty_available: qty,
-      qty_reserved: 0,
-      qty_out: 0,
-      qty_damaged: 0,
+      qty_total: Math.max(0, Number(form.qty_total) || 0),
+      qty_available: Math.max(0, Number(form.qty_available) || 0),
+      qty_reserved: Math.max(0, Number(form.qty_reserved) || 0),
+      qty_out: Math.max(0, Number(form.qty_out) || 0),
+      qty_damaged: Math.max(0, Number(form.qty_damaged) || 0),
       unit_price: Number(form.unit_price) || 0,
-    });
+    };
+
+    let err;
+    if (editId) {
+      ({ error: err } = await supabase.from('rental_equipment').update(payload).eq('id', editId));
+    } else {
+      ({ error: err } = await supabase.from('rental_equipment').insert({
+        establishment_id: member.establishment_id,
+        ...payload,
+        qty_available: payload.qty_available || payload.qty_total,
+      }));
+    }
     setSaving(false);
     if (err) {
       setError(err.message);
       return;
     }
     setOpen(false);
-    setForm({ name: '', category: 'chaises', qty_total: 0, unit_price: 0, description: '' });
+    setEditId(null);
+    setForm(emptyForm);
     await load();
   }
 
@@ -110,31 +157,40 @@ export default function RentEquipment() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-6 gap-3">
         <div>
           <h1 className="text-2xl font-bold font-display text-stone-100">Matériel</h1>
-          <p className="text-stone-400 text-sm">Stock location — dispo, réservé, dehors, endommagé</p>
+          <p className="text-stone-400 text-sm">Touchez une carte pour modifier · ± pour le stock</p>
         </div>
-        <button onClick={() => setOpen(true)} className="btn-primary flex items-center gap-2">
+        <button type="button" onClick={openCreate} className="btn-primary flex items-center gap-2 shrink-0">
           <Plus size={18} /> Ajouter
         </button>
       </div>
 
+      {error && !open && (
+        <div className="mb-3 text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">
+          {error}
+        </div>
+      )}
+
       {items.length === 0 ? (
-        <EmptyState
-          icon={<Package size={48} />}
-          title="Aucun matériel"
-          message="Ajoutez chaises, tables, bâches, etc."
-        />
+        <EmptyState icon={<Package size={48} />} title="Aucun matériel" message="Ajoutez chaises, tables, bâches, etc." />
       ) : (
         <div className="space-y-2">
           {items.map((it) => (
-            <div key={it.id} className="card flex flex-wrap gap-3 items-center">
+            <button
+              type="button"
+              key={it.id}
+              onClick={() => openEdit(it)}
+              className="card w-full text-left flex flex-wrap gap-3 items-center active:scale-[0.99] transition-transform"
+            >
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-stone-100">{it.name}</p>
+                <p className="font-medium text-stone-100 flex items-center gap-2">
+                  {it.name}
+                  <Pencil size={14} className="text-stone-500 shrink-0" />
+                </p>
                 <p className="text-xs text-stone-500">
-                  {EQUIPMENT_CATEGORY_LABELS[it.category] || it.category} ·{' '}
-                  {formatFCFA(Number(it.unit_price))}/j
+                  {EQUIPMENT_CATEGORY_LABELS[it.category] || it.category} · {formatFCFA(Number(it.unit_price))}/j
                 </p>
               </div>
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
@@ -155,28 +211,48 @@ export default function RentEquipment() {
                   <p className="font-semibold text-primary-400">{it.qty_out}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-1">
-                <button type="button" className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200" onClick={() => adjustQty(it, -1)} title="Diminuer">
+              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="p-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200"
+                  onClick={(e) => adjustQty(it, -1, e)}
+                  title="Diminuer"
+                >
                   <Minus size={16} />
                 </button>
-                <button type="button" className="p-2 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200" onClick={() => adjustQty(it, 1)} title="Augmenter">
+                <button
+                  type="button"
+                  className="p-2.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-200"
+                  onClick={(e) => adjustQty(it, 1, e)}
+                  title="Augmenter"
+                >
                   <Plus size={16} />
                 </button>
-                <button type="button" className="p-2 rounded-lg hover:bg-error-500/10 text-stone-400 hover:text-error-400" onClick={() => removeItem(it)} title="Supprimer">
+                <button
+                  type="button"
+                  className="p-2.5 rounded-lg hover:bg-error-500/10 text-stone-400 hover:text-error-400"
+                  onClick={(e) => removeItem(it, e)}
+                  title="Supprimer"
+                >
                   <Trash2 size={16} />
                 </button>
               </div>
-            </div>
+            </button>
           ))}
         </div>
       )}
 
-      <Modal open={open} onClose={() => setOpen(false)} title="Nouveau matériel">
+      <Modal
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setEditId(null);
+        }}
+        title={editId ? 'Modifier le matériel' : 'Nouveau matériel'}
+      >
         <div className="space-y-3">
           {error && (
-            <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">
-              {error}
-            </div>
+            <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">{error}</div>
           )}
           <div>
             <label className="label">Nom</label>
@@ -203,7 +279,17 @@ export default function RentEquipment() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="label">Quantité totale</label>
+              <label className="label">Prix / jour (FCFA)</label>
+              <input
+                type="number"
+                min={0}
+                className="input-field"
+                value={form.unit_price}
+                onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="label">Total</label>
               <input
                 type="number"
                 min={0}
@@ -213,18 +299,56 @@ export default function RentEquipment() {
               />
             </div>
             <div>
-              <label className="label">Prix unitaire (FCFA)</label>
+              <label className="label">Disponible</label>
               <input
                 type="number"
                 min={0}
                 className="input-field"
-                value={form.unit_price}
-                onChange={(e) => setForm({ ...form, unit_price: Number(e.target.value) })}
+                value={form.qty_available}
+                onChange={(e) => setForm({ ...form, qty_available: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="label">Réservé</label>
+              <input
+                type="number"
+                min={0}
+                className="input-field"
+                value={form.qty_reserved}
+                onChange={(e) => setForm({ ...form, qty_reserved: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="label">Dehors</label>
+              <input
+                type="number"
+                min={0}
+                className="input-field"
+                value={form.qty_out}
+                onChange={(e) => setForm({ ...form, qty_out: Number(e.target.value) })}
+              />
+            </div>
+            <div>
+              <label className="label">Endommagé</label>
+              <input
+                type="number"
+                min={0}
+                className="input-field"
+                value={form.qty_damaged}
+                onChange={(e) => setForm({ ...form, qty_damaged: Number(e.target.value) })}
               />
             </div>
           </div>
-          <button onClick={save} disabled={saving} className="btn-primary w-full">
-            {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : 'Enregistrer'}
+          <div>
+            <label className="label">Description</label>
+            <input
+              className="input-field"
+              value={form.description}
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
+            />
+          </div>
+          <button type="button" onClick={save} disabled={saving} className="btn-primary w-full">
+            {saving ? <Loader2 className="animate-spin mx-auto" size={18} /> : editId ? 'Enregistrer les modifications' : 'Créer'}
           </button>
         </div>
       </Modal>
