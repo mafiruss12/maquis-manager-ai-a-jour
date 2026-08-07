@@ -70,6 +70,7 @@ export default function AuthPage() {
     try {
       if (!email.trim()) {
         setError('Identifiant ou e-mail requis');
+        setLoading(false);
         return;
       }
 
