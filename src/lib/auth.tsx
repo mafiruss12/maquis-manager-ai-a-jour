@@ -120,9 +120,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadMemberData(user);
   }
 
-  async function loadMemberData(currentUser: User) {
+  function buildFallbackMember(currentUser: User): Member {
+    const email = currentUser.email ?? '';
+    return {
+      id: currentUser.id,
+      user_id: currentUser.id,
+      email,
+      full_name:
+        (currentUser.user_metadata?.full_name as string) ||
+        (currentUser.user_metadata?.name as string) ||
+        email.split('@')[0] ||
+        'Utilisateur',
+      role: 'owner',
+      status: 'active',
+      establishment_id: null,
+      created_at: new Date().toISOString(),
+    } as Member;
+  }
+
+  async function loadMemberData(currentUser: User): Promise<Member> {
+    const fallback = buildFallbackMember(currentUser);
     try {
-      // Cache offline (non bloquant)
       try {
         if (!isOnline()) {
           const cached = await getCachedAuthProfile(currentUser.id);
@@ -130,26 +148,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setMember(cached.member as Member);
             setAccessRequest(null);
             setNeedsAccess(false);
-            return;
+            return cached.member as Member;
           }
         }
       } catch {
-        /* ignore cache */
+        /* ignore */
       }
 
       let existingMember: Member | null = null;
       try {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('members')
           .select('*')
           .eq('user_id', currentUser.id)
           .maybeSingle();
+        if (error) console.error('members select error', error);
         existingMember = (data as Member) || null;
       } catch (e) {
-        console.error('members select', e);
+        console.error('members select throw', e);
       }
 
-      // Lier un établissement déjà créé par l'utilisateur
       if (existingMember && !existingMember.establishment_id) {
         try {
           const { data: owned } = await supabase
@@ -190,96 +208,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           /* ignore */
         }
-        return;
+        return existingMember;
       }
-
-      // Nouveau compte → propriétaire
-      const email = currentUser.email ?? '';
-      const fullName =
-        (currentUser.user_metadata?.full_name as string) ||
-        (currentUser.user_metadata?.name as string) ||
-        email.split('@')[0] ||
-        'Utilisateur';
 
       const payload = {
         user_id: currentUser.id,
-        email,
-        full_name: fullName,
+        email: fallback.email,
+        full_name: fallback.full_name,
         role: 'owner' as const,
         status: 'active' as const,
-        establishment_id: null,
+        establishment_id: null as string | null,
       };
 
-      let newMember: Member | null = null;
       try {
         const { data, error } = await supabase
           .from('members')
           .upsert(payload, { onConflict: 'user_id' })
           .select()
           .maybeSingle();
-        if (!error && data) newMember = data as Member;
-        if (error) console.error('member upsert', error);
+        if (error) console.error('member upsert error', error);
+        if (data) {
+          const m = data as Member;
+          setMember(m);
+          setAccessRequest(null);
+          setNeedsAccess(false);
+          try {
+            await loadMyEstablishments(currentUser, m);
+          } catch {
+            /* */
+          }
+          return m;
+        }
       } catch (e) {
         console.error('member upsert throw', e);
       }
 
-      if (!newMember) {
-        // Relecture
-        try {
-          const { data } = await supabase
-            .from('members')
-            .select('*')
-            .eq('user_id', currentUser.id)
-            .maybeSingle();
-          newMember = (data as Member) || null;
-        } catch {
-          /* */
-        }
-      }
-
-      if (newMember) {
-        setMember(newMember);
-        setAccessRequest(null);
-        setNeedsAccess(false);
-        try {
-          await loadMyEstablishments(currentUser, newMember);
-        } catch {
-          /* */
-        }
-        return;
-      }
-
-      // Dernier recours : profil minimal local pour ne JAMAIS bloquer la connexion
-      const fallback: Member = {
-        id: currentUser.id,
-        user_id: currentUser.id,
-        email,
-        full_name: fullName,
-        role: 'owner',
-        status: 'active',
-        establishment_id: null,
-        created_at: new Date().toISOString(),
-      } as Member;
       setMember(fallback);
       setAccessRequest(null);
       setNeedsAccess(false);
       setMyEstablishments([]);
       setActiveEstablishment(null);
+      return fallback;
     } catch (e) {
       console.error('loadMemberData', e);
-      // Ne jamais laisser l'utilisateur sans membre après login réussi
-      const email = currentUser.email ?? '';
-      setMember({
-        id: currentUser.id,
-        user_id: currentUser.id,
-        email,
-        full_name: email.split('@')[0] || 'Utilisateur',
-        role: 'owner',
-        status: 'active',
-        establishment_id: null,
-        created_at: new Date().toISOString(),
-      } as Member);
+      setMember(fallback);
       setNeedsAccess(false);
+      return fallback;
     }
   }
 
@@ -295,12 +269,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(session?.user ?? null);
         if (session?.user) {
           const seq = ++memberLoadSeq;
-          await Promise.race([
-            loadMemberData(session.user),
-            new Promise((resolve) => setTimeout(resolve, 4000)),
+          const result = await Promise.race([
+            loadMemberData(session.user).then((m) => m),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
           ]);
-          if (mounted && seq === memberLoadSeq) {
-            // si member toujours null après timeout, loadMemberData a déjà un fallback
+          if (mounted && seq === memberLoadSeq && result === null) {
+            const fb = buildFallbackMember(session.user);
+            setMember(fb);
+            setNeedsAccess(false);
           }
         }
       } catch (e) {
@@ -323,10 +299,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (newSession?.user && (event === 'SIGNED_IN' || event === 'USER_UPDATED')) {
         const seq = ++memberLoadSeq;
         try {
-          await Promise.race([
-            loadMemberData(newSession.user),
-            new Promise((resolve) => setTimeout(resolve, 4000)),
+          const result = await Promise.race([
+            loadMemberData(newSession.user).then((m) => m),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
           ]);
+          if (mounted && seq === memberLoadSeq && result === null) {
+            setMember(buildFallbackMember(newSession.user));
+            setNeedsAccess(false);
+          }
         } finally {
           if (mounted && seq === memberLoadSeq) setLoading(false);
         }
@@ -375,12 +355,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       if (data.user) {
         try {
-          await Promise.race([
-            loadMemberData(data.user),
-            new Promise((resolve) => setTimeout(resolve, 4000)),
+          const result = await Promise.race([
+            loadMemberData(data.user).then((m) => m),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
           ]);
+          if (result === null) {
+            setMember(buildFallbackMember(data.user));
+            setNeedsAccess(false);
+          }
         } catch (err) {
           console.error('loadMember after signIn', err);
+          setMember(buildFallbackMember(data.user));
+          setNeedsAccess(false);
         }
       }
       setLoading(false);
