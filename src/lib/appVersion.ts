@@ -1,12 +1,12 @@
 /** Version affichée dans l'app (incrémenter à chaque release notable) */
-export const APP_VERSION = '1.2.1';
-export const APP_VERSION_CODE = 6;
+export const APP_VERSION = '1.2.2';
+export const APP_VERSION_CODE = 7;
 
 export const GITHUB_OWNER = 'mafiruss12';
 export const GITHUB_REPO = 'maquis-manager-ai-a-jour';
 export const GITHUB_RELEASES_API = `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/releases/latest`;
 export const GITHUB_RELEASES_PAGE = `https://github.com/${GITHUB_OWNER}/${GITHUB_REPO}/releases`;
-export const WEB_APP_URL = 'https://maquis-manager-ai-a-jour.vercel.app';
+export const WEB_APP_URL = 'https://maquis-mananger.vercel.app';
 export const VERSION_JSON_URL = `${WEB_APP_URL}/version.json`;
 
 export function parseVersion(v: string): number[] {
