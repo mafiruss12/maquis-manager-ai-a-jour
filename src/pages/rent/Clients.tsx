@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { UserCircle, Plus, Loader2, MessageCircle, Pencil, Trash2 } from 'lucide-react';
+import { UserCircle, Plus, Loader2, MessageCircle, Pencil, Trash2, MapPin, Phone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth';
 import { EmptyState, Modal } from '@/components/ui';
@@ -49,8 +49,8 @@ export default function RentClients() {
     setForm({
       full_name: c.full_name || '',
       phone: c.phone || '',
-      whatsapp: (c as any).whatsapp || c.phone || '',
-      email: (c as any).email || '',
+      whatsapp: c.whatsapp || c.phone || '',
+      email: c.email || '',
       location: c.location || '',
       notes: c.notes || '',
     });
@@ -113,7 +113,7 @@ export default function RentClients() {
       <div className="flex items-center justify-between mb-6 gap-3">
         <div>
           <h1 className="text-2xl font-bold font-display text-stone-100">Clients</h1>
-          <p className="text-stone-400 text-sm">Touchez une fiche pour modifier</p>
+          <p className="text-stone-400 text-sm">Fiches livraisons — téléphone, WhatsApp, localisation</p>
         </div>
         <button type="button" onClick={openCreate} className="btn-primary flex items-center gap-2 shrink-0">
           <Plus size={18} /> Ajouter
@@ -121,57 +121,76 @@ export default function RentClients() {
       </div>
 
       {list.length === 0 ? (
-        <EmptyState icon={<UserCircle size={48} />} title="Aucun client" message="Ajoutez votre premier client." />
+        <EmptyState icon={<UserCircle size={48} />} title="Aucun client" message="Ajoutez un client pour les livraisons." />
       ) : (
         <div className="space-y-2">
-          {list.map((c) => (
-            <button
-              type="button"
-              key={c.id}
-              onClick={() => openEdit(c)}
-              className="card w-full text-left flex items-center gap-3 active:scale-[0.99]"
-            >
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-stone-100 flex items-center gap-2">
-                  {c.full_name}
-                  <Pencil size={14} className="text-stone-500" />
-                </p>
-                <p className="text-xs text-stone-500">
-                  {c.phone || '—'} · WA {(c as any).whatsapp || c.phone || '—'}
-                </p>
-                <p className="text-xs text-stone-600 truncate">{c.location || 'Pas de localisation'}{(c as any).email ? ` · ${(c as any).email}` : ''}</p>
-              </div>
-              <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-                {(c.phone || (c as any).whatsapp) && (
-                  <>
+          {list.map((c) => {
+            const wa = c.whatsapp || c.phone;
+            return (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => openEdit(c)}
+                className="card w-full text-left flex items-center gap-3 active:scale-[0.99]"
+              >
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-stone-100 flex items-center gap-2">
+                    {c.full_name}
+                    <Pencil size={14} className="text-stone-500" />
+                  </p>
+                  <p className="text-xs text-stone-500 flex flex-wrap gap-x-2 gap-y-0.5">
+                    {c.phone && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <Phone size={10} /> {c.phone}
+                      </span>
+                    )}
+                    {c.location && (
+                      <span className="inline-flex items-center gap-0.5">
+                        <MapPin size={10} /> {c.location}
+                      </span>
+                    )}
+                    {c.email && <span>{c.email}</span>}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                  {wa && (
                     <a
-                      href={buildWhatsAppLink((c as any).whatsapp || c.phone, `Bonjour ${c.full_name}, `)}
+                      href={buildWhatsAppLink(wa, `Bonjour ${c.full_name}, `)}
                       target="_blank"
                       rel="noreferrer"
                       className="p-2.5 rounded-lg bg-success-500/15 text-success-400"
                     >
                       <MessageCircle size={18} />
                     </a>
-                  </>
-                )}
-                <button
-                  type="button"
-                  className="p-2.5 rounded-lg hover:bg-error-500/10 text-stone-400"
-                  onClick={(e) => removeClient(c, e)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </div>
-            </button>
-          ))}
+                  )}
+                  <button
+                    type="button"
+                    className="p-2.5 rounded-lg hover:bg-error-500/10 text-stone-400"
+                    onClick={(e) => removeClient(c, e)}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      <Modal open={open} onClose={() => { setOpen(false); setEditId(null); }} title={editId ? 'Modifier le client' : 'Nouveau client'}>
+      <Modal
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setEditId(null);
+        }}
+        title={editId ? 'Modifier le client' : 'Nouveau client'}
+      >
         <div className="space-y-3">
-          {error && <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">{error}</div>}
+          {error && (
+            <div className="text-sm text-error-300 bg-error-500/10 border border-error-500/30 rounded-xl p-3">{error}</div>
+          )}
           <div>
-            <label className="label">Nom</label>
+            <label className="label">Nom complet *</label>
             <input className="input-field" value={form.full_name} onChange={(e) => setForm({ ...form, full_name: e.target.value })} />
           </div>
           <div>
@@ -180,14 +199,19 @@ export default function RentClients() {
           </div>
           <div>
             <label className="label">WhatsApp</label>
-            <input className="input-field" value={form.whatsapp} onChange={(e) => setForm({ ...form, whatsapp: e.target.value })} placeholder="Si différent du téléphone" />
+            <input
+              className="input-field"
+              value={form.whatsapp}
+              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+              placeholder="Si différent du téléphone"
+            />
           </div>
           <div>
-            <label className="label">E-mail</label>
+            <label className="label">Email</label>
             <input className="input-field" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
           </div>
           <div>
-            <label className="label">Localisation / adresse</label>
+            <label className="label">Localisation / adresse livraison</label>
             <input className="input-field" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="Quartier, ville…" />
           </div>
           <div>

@@ -1,4 +1,1 @@
-{
-  "version": "1.2.0",
-  "notes": "Location événementielle : édition matériel/clients/commandes, catégories libres, déconnexion et mise à jour renforcées."
-}
+{"version":"1.2.1","notes":"Calendrier mois multi-commandes, clients WhatsApp/localisation, devis/caution/conflits."}
