@@ -31,6 +31,8 @@ export default function RentEquipment() {
   const [form, setForm] = useState(emptyForm);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [customCategory, setCustomCategory] = useState(false);
+  const [categoryInput, setCategoryInput] = useState('');
 
   async function load() {
     if (!member?.establishment_id) {
@@ -55,6 +57,8 @@ export default function RentEquipment() {
   function openCreate() {
     setEditId(null);
     setForm(emptyForm);
+    setCustomCategory(false);
+    setCategoryInput('');
     setError(null);
     setOpen(true);
   }
@@ -73,6 +77,8 @@ export default function RentEquipment() {
       unit_price: Number(it.unit_price) || 0,
       description: it.description || '',
     });
+    setCustomCategory(!(EQUIPMENT_CATEGORIES as readonly string[]).includes(it.category));
+    setCategoryInput(it.category || '');
     setError(null);
     setOpen(true);
   }
@@ -265,17 +271,72 @@ export default function RentEquipment() {
           </div>
           <div>
             <label className="label">Catégorie</label>
-            <select
-              className="input-field"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
-              {EQUIPMENT_CATEGORIES.map((c) => (
-                <option key={c} value={c}>
-                  {EQUIPMENT_CATEGORY_LABELS[c]}
-                </option>
-              ))}
-            </select>
+            {!customCategory ? (
+              <>
+                <select
+                  className="input-field"
+                  value={
+                    [...EQUIPMENT_CATEGORIES, ...items.map((i) => i.category)].map(String).includes(form.category)
+                      ? form.category
+                      : form.category
+                      ? '__custom__'
+                      : 'chaises'
+                  }
+                  onChange={(e) => {
+                    if (e.target.value === '__new__') {
+                      setCustomCategory(true);
+                      setCategoryInput('');
+                      setForm({ ...form, category: '' });
+                    } else if (e.target.value === '__custom__') {
+                      setCustomCategory(true);
+                      setCategoryInput(form.category);
+                    } else {
+                      setCustomCategory(false);
+                      setForm({ ...form, category: e.target.value });
+                    }
+                  }}
+                >
+                  {Array.from(
+                    new Set([
+                      ...EQUIPMENT_CATEGORIES,
+                      ...items.map((i) => i.category).filter(Boolean),
+                      ...(form.category && !(EQUIPMENT_CATEGORIES as readonly string[]).includes(form.category)
+                        ? [form.category]
+                        : []),
+                    ])
+                  ).map((c) => (
+                    <option key={c} value={c}>
+                      {EQUIPMENT_CATEGORY_LABELS[c] || c}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Nouvelle catégorie…</option>
+                </select>
+              </>
+            ) : (
+              <div className="space-y-2">
+                <input
+                  className="input-field"
+                  value={categoryInput || form.category}
+                  onChange={(e) => {
+                    setCategoryInput(e.target.value);
+                    setForm({ ...form, category: e.target.value.trim() || 'autres' });
+                  }}
+                  placeholder="Ex: Podium, Générateur, Tapis…"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  className="text-xs text-primary-400"
+                  onClick={() => {
+                    setCustomCategory(false);
+                    if (!form.category) setForm({ ...form, category: 'autres' });
+                  }}
+                >
+                  ← Revenir à la liste
+                </button>
+              </div>
+            )}
+            <p className="text-xs text-stone-500 mt-1">Choisissez une catégorie ou créez-en une nouvelle</p>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
