@@ -1,30 +1,26 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+/** Fallback production si variables Vite absentes au build */
+const FALLBACK_URL = 'https://ycoaxbgxstxondxxnhhf.supabase.co';
+const FALLBACK_ANON =
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inljb2F4Ymd4c3R4b25keHhuaGhmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU2MTg5MTgsImV4cCI6MjEwMTE5NDkxOH0.iSPqcC8X1BXlgVYfhtFBY4QFq9UwiMycSisfhkNxV80';
+
+const envUrl = (import.meta.env.VITE_SUPABASE_URL as string | undefined)?.trim();
+const envKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined)?.trim();
+
+const supabaseUrl =
+  envUrl && envUrl.startsWith('http') && !envUrl.includes('placeholder') ? envUrl : FALLBACK_URL;
+const supabaseAnonKey =
+  envKey && envKey.length > 20 && envKey !== 'placeholder-key' ? envKey : FALLBACK_ANON;
 
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 
-let supabase: SupabaseClient;
-
-if (isSupabaseConfigured) {
-  supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: true,
-    },
-  });
-} else {
-  // Client factice pour éviter le crash au démarrage
-  // L'app affichera un message d'erreur clair
-  console.error(
-    '⚠️ Variables Supabase manquantes.\n' +
-      'Ajoute VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY dans Vercel → Settings → Environment Variables'
-  );
-  supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-export { supabase };
+export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    flowType: 'pkce',
+  },
+});
