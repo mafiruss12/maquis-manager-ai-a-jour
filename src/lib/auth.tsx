@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Nouveau compte → employé actif (accès app). Création d'établissement via TypePicker.
+    // Nouveau compte → propriétaire : crée son activité puis ses employés.
     const email = currentUser.email ?? '';
     const fullName =
       (currentUser.user_metadata?.full_name as string) ||
@@ -191,7 +191,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user_id: currentUser.id,
         email,
         full_name: fullName,
-        role: 'employee',
+        role: 'owner',
         status: 'active',
         establishment_id: null,
       })
@@ -335,7 +335,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           user_id: data.user.id,
           email,
           full_name: fullName,
-          role: 'employee',
+          role: 'owner',
           status: 'active',
           establishment_id: null,
         },

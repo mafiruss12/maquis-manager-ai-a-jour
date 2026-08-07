@@ -233,7 +233,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </nav>
 
-        {myEstablishments.length > 0 && (
+        {/* Sélecteur d'activité : uniquement propriétaire/admin avec plusieurs établissements */}
+        {member &&
+          ['super_admin', 'admin', 'owner'].includes(member.role) &&
+          myEstablishments.length > 1 && (
           <div className="px-3 pb-2">
             <label className="text-[10px] uppercase tracking-wide text-stone-500 px-1">Activité</label>
             <select
@@ -250,6 +253,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </option>
               ))}
             </select>
+          </div>
+        )}
+        {member &&
+          ['super_admin', 'admin', 'owner'].includes(member.role) &&
+          myEstablishments.length === 1 && (
+          <div className="px-3 pb-2">
+            <p className="text-[10px] uppercase tracking-wide text-stone-500 px-1">Activité</p>
+            <p className="text-xs text-stone-400 px-1 mt-1 truncate">
+              {myEstablishments[0].name} ({BUSINESS_LABELS[normalizeBusinessType(myEstablishments[0].type)]})
+            </p>
           </div>
         )}
         <div className="p-3 border-t border-stone-800 shrink-0">
