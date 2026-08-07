@@ -382,8 +382,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!isSafeLogin(login)) {
       return { error: 'Identifiant invalide (2–40 caractères, lettres/chiffres, ou e-mail valide).' };
     }
-    if (!password || password.length < 8) {
-      return { error: 'Mot de passe trop court (minimum 8 caractères).' };
+    if (!password || password.length < 6) {
+      return { error: 'Mot de passe trop court (minimum 6 caractères).' };
     }
     const email = toAuthEmail(login);
     setLoading(true);

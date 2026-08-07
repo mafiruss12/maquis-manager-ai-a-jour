@@ -95,15 +95,22 @@ export default function AuthPage() {
       }
 
       if (mode === 'signin') {
+        if (password.length < 6) {
+          setError('Le mot de passe doit contenir au moins 6 caractères');
+          return;
+        }
         const { error: err } = await signIn(email, password);
         if (err) {
           setError(mapAuthError(err));
+          return;
         }
+        // Succès garanti : recharger pour entrer dans l'app
+        window.location.assign('/');
         return;
       }
 
       // signup
-      if (password.length < 8) {
+      if (password.length < 6) {
         setError('Le mot de passe doit contenir au moins 6 caractères');
         return;
       }
@@ -112,10 +119,13 @@ export default function AuthPage() {
         return;
       }
       const { error: err } = await signUp(email, password, fullName);
-      if (err) setError(mapAuthError(err));
-      else {
-        setSuccess('Compte créé. Si vous n\'êtes pas redirigé, connectez-vous avec le même identifiant.');
+      if (err) {
+        setError(mapAuthError(err));
+        return;
       }
+      setSuccess('Compte créé ! Entrée dans l\'application…');
+      window.location.assign('/');
+
     } finally {
       setLoading(false);
     }
