@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { UserCircle, Plus, Loader2, MessageCircle, Pencil, Trash2, MapPin, Phone } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { openWhatsApp, buildInvoiceWhatsAppMessage } from '@/lib/integrations';
 import { useAuth } from '@/lib/auth';
 import { EmptyState, Modal } from '@/components/ui';
-import { buildWhatsAppLink, buildSmsLink } from '@/lib/businessTypes';
 import type { RentalClient } from '@/lib/rentalTypes';
 
 const empty = { full_name: '', phone: '', whatsapp: '', email: '', location: '', notes: '' };
@@ -127,18 +127,17 @@ export default function RentClients() {
           {list.map((c) => {
             const wa = c.whatsapp || c.phone;
             return (
-              <button
-                type="button"
-                key={c.id}
-                onClick={() => openEdit(c)}
-                className="card w-full text-left flex items-center gap-3 active:scale-[0.99]"
-              >
-                <div className="flex-1 min-w-0">
+              <div key={c.id} className="card flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => openEdit(c)}
+                  className="flex-1 text-left min-w-0 active:scale-[0.99]"
+                >
                   <p className="font-medium text-stone-100 flex items-center gap-2">
                     {c.full_name}
                     <Pencil size={14} className="text-stone-500" />
                   </p>
-                  <p className="text-xs text-stone-500 flex flex-wrap gap-x-2 gap-y-0.5">
+                  <p className="text-xs text-stone-500 flex flex-wrap gap-x-2 gap-y-0.5 mt-0.5">
                     {c.phone && (
                       <span className="inline-flex items-center gap-0.5">
                         <Phone size={10} /> {c.phone}
@@ -151,17 +150,27 @@ export default function RentClients() {
                     )}
                     {c.email && <span>{c.email}</span>}
                   </p>
-                </div>
-                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                </button>
+                <div className="flex items-center gap-1 shrink-0">
                   {wa && (
-                    <a
-                      href={buildWhatsAppLink(wa, `Bonjour ${c.full_name}, `)}
-                      target="_blank"
-                      rel="noreferrer"
+                    <button
+                      type="button"
                       className="p-2.5 rounded-lg bg-success-500/15 text-success-400"
+                      title="WhatsApp"
+                      onClick={() =>
+                        openWhatsApp(
+                          wa,
+                          buildInvoiceWhatsAppMessage({
+                            businessName: 'Stock Manager AI',
+                            clientName: c.full_name,
+                            amount: 0,
+                            note: `Bonjour ${c.full_name},`,
+                          })
+                        )
+                      }
                     >
                       <MessageCircle size={18} />
-                    </a>
+                    </button>
                   )}
                   <button
                     type="button"
@@ -171,7 +180,7 @@ export default function RentClients() {
                     <Trash2 size={16} />
                   </button>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

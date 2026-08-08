@@ -21,6 +21,7 @@ interface DashboardData {
   todaySales: number;
   todayExpenses: number;
   todayProfit: number;
+  weekSalesTotal: number;
   lowStockCount: number;
   employeeCount: number;
   activeOrders: number;
@@ -31,6 +32,8 @@ interface DashboardData {
   recentSales: Sale[];
   activeOrdersList: Order[];
   topProducts: { name: string; revenue: number }[];
+  aiAlerts: string[];
+  dataPartial: boolean;
 }
 
 export default function Dashboard() {
@@ -68,23 +71,59 @@ export default function Dashboard() {
           supabase.from('sales').select('total, created_at, product_id').eq('establishment_id', estId).gte('created_at', new Date(Date.now() - 7 * 86400000).toISOString()),
         ]);
 
+      const queryErrors = [salesRes, expensesRes, productsRes, weekSalesRes]
+        .map((r) => r.error?.message)
+        .filter(Boolean);
+      const dataPartial = queryErrors.length > 0;
+      if (dataPartial) {
+        setError(`Données partielles : ${queryErrors[0]}`);
+      }
+
       const todaySales = (salesRes.data ?? []).reduce((s, x) => s + Number(x.total), 0);
       const todayExpenses = (expensesRes.data ?? []).reduce((s, x) => s + Number(x.amount), 0);
-      const lowStock = (productsRes.data ?? []).filter((p) => Number(p.stock) <= Number(p.min_stock)).length;
+      const products = productsRes.data ?? [];
+      const lowStockItems = products.filter((p) => Number(p.stock) <= Number(p.min_stock));
+      const lowStock = lowStockItems.length;
       const tables = tablesRes.data ?? [];
       const freeTables = tables.filter((t) => t.status === 'free').length;
       const occupiedTables = tables.filter((t) => t.status === 'occupied').length;
+
+      const toLocalDay = (iso: string) => {
+        const d = new Date(iso);
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
 
       const weeklyData: { label: string; value: number }[] = [];
       const weekValues: number[] = [];
       for (let i = 6; i >= 0; i--) {
         const date = new Date();
+        date.setHours(12, 0, 0, 0);
         date.setDate(date.getDate() - i);
-        const dayStr = date.toISOString().split('T')[0];
+        const dayStr = toLocalDay(date.toISOString());
         const label = date.toLocaleDateString('fr-FR', { weekday: 'short' });
-        const sum = (weekSalesRes.data ?? []).filter((s) => s.created_at.startsWith(dayStr)).reduce((a, b) => a + Number(b.total), 0);
+        const sum = (weekSalesRes.data ?? [])
+          .filter((s) => s.created_at && toLocalDay(s.created_at) === dayStr)
+          .reduce((a, b) => a + Number(b.total), 0);
         weeklyData.push({ label, value: sum });
         weekValues.push(sum);
+      }
+      const weekSalesTotal = weekValues.reduce((a, b) => a + b, 0);
+
+      const aiAlerts: string[] = [];
+      for (const p of lowStockItems.slice(0, 5)) {
+        const st = Number(p.stock);
+        const min = Number(p.min_stock) || 1;
+        if (st <= 0) aiAlerts.push(`Rupture : ${p.name}`);
+        else aiAlerts.push(`Stock bas : ${p.name} (${st} restant, seuil ${min})`);
+      }
+      if (weekSalesTotal > 0 && todaySales === 0) {
+        aiAlerts.push('Aucune vente enregistrée aujourd\'hui alors que la semaine est active.');
+      }
+      if (todayExpenses > todaySales && todaySales > 0) {
+        aiAlerts.push('Dépenses du jour supérieures aux ventes — marge négative.');
       }
 
       const prodRev: Record<string, number> = {};
@@ -98,12 +137,15 @@ export default function Dashboard() {
 
       if (!cancelled) {
         setData({
-          todaySales, todayExpenses, todayProfit: todaySales - todayExpenses, lowStockCount: lowStock,
+          todaySales, todayExpenses, todayProfit: todaySales - todayExpenses,
+          weekSalesTotal, lowStockCount: lowStock,
           employeeCount: employeesRes.data?.length ?? 0, activeOrders: ordersRes.data?.length ?? 0,
           freeTables, occupiedTables, weeklyData, weekValues,
           recentSales: (recentRes.data ?? []) as Sale[],
           activeOrdersList: (ordersRes.data ?? []) as Order[],
           topProducts,
+          aiAlerts,
+          dataPartial,
         });
       }
       } catch (e) {
@@ -111,9 +153,10 @@ export default function Dashboard() {
         console.error(e);
         if (!cancelled) {
           setData({
-            todaySales: 0, todayExpenses: 0, todayProfit: 0, lowStockCount: 0,
+            todaySales: 0, todayExpenses: 0, todayProfit: 0, weekSalesTotal: 0, lowStockCount: 0,
             employeeCount: 0, activeOrders: 0, freeTables: 0, occupiedTables: 0,
             weeklyData: [], weekValues: [], recentSales: [], activeOrdersList: [], topProducts: [],
+            aiAlerts: [], dataPartial: true,
           });
         }
       } finally {
@@ -173,7 +216,9 @@ export default function Dashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
         <StatCard title="Ventes du jour" value={formatFCFA(data.todaySales)} icon={<DollarSign size={20} />} />
-        <StatCard title="Dépenses" value={formatFCFA(data.todayExpenses)} icon={<TrendingUp size={20} />} />
+        <StatCard title="CA 7 jours" value={formatFCFA(data.weekSalesTotal)} icon={<TrendingUp size={20} />} />
+        <StatCard title="Dépenses du jour" value={formatFCFA(data.todayExpenses)} icon={<DollarSign size={20} />} />
+        <StatCard title="Bénéfice jour" value={formatFCFA(data.todayProfit)} icon={<TrendingUp size={20} />} />
         {(bizType === 'restaurant' || bizType === 'bar') && (
           <StatCard title="Commandes actives" value={String(data.activeOrders)} icon={<Receipt size={20} />} />
         )}
@@ -235,6 +280,18 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+      
+      {data.aiAlerts.length > 0 && (
+        <div className="mb-6 rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 space-y-2">
+          <p className="text-sm font-semibold text-amber-200">Alertes IA — Stock Manager</p>
+          <ul className="space-y-1">
+            {data.aiAlerts.map((a, i) => (
+              <li key={i} className="text-sm text-amber-100/90">⚠️ {a}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {data.lowStockCount > 0 && (
         <div className="card border border-warning-500/30 bg-warning-500/5 flex items-start gap-3">

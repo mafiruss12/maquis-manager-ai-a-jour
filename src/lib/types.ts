@@ -4,7 +4,7 @@ export type MemberStatus = 'active' | 'suspended';
 
 export type AccessRequestStatus = 'pending' | 'approved' | 'rejected';
 
-export type PaymentMethod = 'cash' | 'mobile_money' | 'other';
+export type PaymentMethod = 'cash' | 'mobile_money' | 'orange_money' | 'mtn_money' | 'moov_money' | 'wave' | 'card' | 'other';
 
 export interface Establishment {
   id: string;

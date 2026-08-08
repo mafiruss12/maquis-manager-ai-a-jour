@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Loader2, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { MOBILE_MONEY_PROVIDERS, MOBILE_MONEY_LABELS, type MobileMoneyProvider } from '@/lib/integrations';
 import { useAuth } from '@/lib/auth';
 import type { Product, PaymentMethod } from '@/lib/types';
 import { Modal, EmptyState } from '@/components/ui';
@@ -226,23 +227,22 @@ export default function Caisse() {
               </div>
             </div>
             <label className="label">Mode de paiement</label>
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              <button
-                onClick={() => setPaymentMethod('cash')}
-                className={`p-3 rounded-xl border flex items-center gap-2 justify-center transition-all ${
-                  paymentMethod === 'cash' ? 'border-primary-500 bg-primary-500/10 text-primary-300' : 'border-stone-700 text-stone-400'
-                }`}
-              >
-                <CreditCard size={18} /> Espèces
-              </button>
-              <button
-                onClick={() => setPaymentMethod('mobile_money')}
-                className={`p-3 rounded-xl border flex items-center gap-2 justify-center transition-all ${
-                  paymentMethod === 'mobile_money' ? 'border-primary-500 bg-primary-500/10 text-primary-300' : 'border-stone-700 text-stone-400'
-                }`}
-              >
-                <Smartphone size={18} /> Mobile Money
-              </button>
+            <div className="grid grid-cols-2 gap-2 mb-5">
+              {MOBILE_MONEY_PROVIDERS.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setPaymentMethod(m as PaymentMethod)}
+                  className={`p-2.5 rounded-xl border flex items-center gap-2 justify-center text-sm transition-all ${
+                    paymentMethod === m
+                      ? 'border-primary-500 bg-primary-500/10 text-primary-300'
+                      : 'border-stone-700 text-stone-400'
+                  }`}
+                >
+                  {m === 'cash' || m === 'card' ? <CreditCard size={16} /> : <Smartphone size={16} />}
+                  {MOBILE_MONEY_LABELS[m]}
+                </button>
+              ))}
             </div>
             <button onClick={processSale} disabled={processing} className="btn-primary w-full flex items-center justify-center gap-2">
               {processing ? <Loader2 className="animate-spin" size={18} /> : null}
