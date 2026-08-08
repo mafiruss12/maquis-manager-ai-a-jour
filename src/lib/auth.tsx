@@ -475,7 +475,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         setUser(user);
         try {
-          await supabase.from('members').upsert(
+          const { error: memErr } = await supabase.from('members').upsert(
             {
               user_id: user.id,
               email: user.email || email,
@@ -486,7 +486,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             },
             { onConflict: 'user_id' }
           );
-        } catch { /* trigger SQL peut déjà l'avoir créé */ }
+          if (memErr) console.warn('member upsert', memErr.message);
+        } catch { /* trigger SQL peut déjà l\'avoir créé */ }
         try {
           await loadMemberData(user);
         } catch {

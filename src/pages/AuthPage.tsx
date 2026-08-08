@@ -107,7 +107,7 @@ export default function AuthPage() {
         setSuccess('Connexion réussie…');
         // Laisse le temps à la session d'être écrite en localStorage
         await new Promise((r) => setTimeout(r, 150));
-        window.location.href = '/dashboard';
+        window.location.replace('/dashboard');
         return;
       }
 
@@ -123,7 +123,7 @@ export default function AuthPage() {
       }
       setSuccess("Compte créé ! Entrée dans l'application…");
       await new Promise((r) => setTimeout(r, 150));
-      window.location.href = '/dashboard';
+      window.location.replace('/dashboard');
     } catch (ex: any) {
       setError(ex?.message || 'Erreur inattendue. Réessayez.');
     } finally {
