@@ -15,19 +15,35 @@ const MARQUEE_MESSAGES = [
 
 type Mode = 'signin' | 'signup' | 'forgot';
 
-function mapAuthError(err: string): string {
-  const e = err.toLowerCase();
-  if (e.includes('invalid login credentials') || e.includes('invalid_credentials')) {
-    return 'Mot de passe incorrect ou identifiant inconnu.';
+function mapAuthError(err: string, context: 'signin' | 'signup' | 'forgot' | 'other' = 'other'): string {
+  const e = (err || '').toLowerCase();
+  if (
+    e.includes('invalid login credentials') ||
+    e.includes('invalid_credentials') ||
+    e.includes('invalid email or password') ||
+    e.includes('email/password')
+  ) {
+    return context === 'signin'
+      ? 'Mot de passe incorrect. Vérifiez votre saisie ou réinitialisez-le.'
+      : 'Identifiant ou mot de passe incorrect.';
+  }
+  if (
+    e.includes('user already registered') ||
+    e.includes('already been registered') ||
+    e.includes('already registered') ||
+    e.includes('email address is already') ||
+    e.includes('already exists')
+  ) {
+    return 'Cet identifiant (e-mail) est déjà utilisé. Connectez-vous ou utilisez « Mot de passe oublié ».';
   }
   if (e.includes('email not confirmed')) {
     return 'E-mail non confirmé. Vérifiez votre boîte mail.';
   }
-  if (e.includes('user already registered')) {
-    return 'Ce compte existe déjà. Connectez-vous ou réinitialisez le mot de passe.';
-  }
-  if (e.includes('password')) {
+  if (e.includes('password') && (e.includes('least') || e.includes('short') || e.includes('6') || e.includes('8'))) {
     return 'Mot de passe trop court (minimum 6 caractères).';
+  }
+  if (e.includes('interdit') || e.includes('insert member')) {
+    return 'Impossible de créer le profil. Réessayez dans un instant.';
   }
   return err;
 }
@@ -85,7 +101,7 @@ export default function AuthPage() {
         const { error: err } = await supabase.auth.resetPasswordForEmail(authEmail, {
           redirectTo: `${window.location.origin}/`,
         });
-        if (err) setError(mapAuthError(err.message));
+        if (err) setError(mapAuthError(err.message, 'forgot'));
         else
           setSuccess(
             `Un e-mail de réinitialisation a été envoyé à ${authEmail} s'il existe un compte.`
@@ -101,7 +117,7 @@ export default function AuthPage() {
       if (mode === 'signin') {
         const { error: err } = await signIn(login, password);
         if (err) {
-          setError(mapAuthError(err));
+          setError(mapAuthError(err, 'signin'));
           return;
         }
         setSuccess('Connexion réussie…');
@@ -118,7 +134,7 @@ export default function AuthPage() {
       }
       const { error: err } = await signUp(login, password, fullName.trim());
       if (err) {
-        setError(mapAuthError(err));
+        setError(mapAuthError(err, 'signup'));
         return;
       }
       setSuccess("Compte créé ! Entrée dans l'application…");
