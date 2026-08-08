@@ -474,6 +474,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (session) setSession(session);
       if (user) {
         setUser(user);
+        setNeedsAccess(false);
         try {
           const { error: memErr } = await supabase.from('members').upsert(
             {

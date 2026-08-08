@@ -49,7 +49,7 @@ function mapAuthError(err: string, context: 'signin' | 'signup' | 'forgot' | 'ot
 }
 
 export default function AuthPage() {
-  const { signIn, signUp, signInWithGoogle } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
   const [mode, setMode] = useState<Mode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -78,6 +78,14 @@ export default function AuthPage() {
     }
   }, []);
 
+  // Déjà connecté → dashboard
+  useEffect(() => {
+    if (user && !authLoading) {
+      window.location.replace('/dashboard');
+    }
+  }, [user, authLoading]);
+
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
@@ -87,6 +95,7 @@ export default function AuthPage() {
       const login = email.trim();
       if (!login) {
         setError('Identifiant ou e-mail requis');
+        setLoading(false);
         return;
       }
 
@@ -96,6 +105,7 @@ export default function AuthPage() {
           setError(
             'La réinitialisation par e-mail nécessite une vraie adresse e-mail (pas un login simple).'
           );
+          setLoading(false);
           return;
         }
         const { error: err } = await supabase.auth.resetPasswordForEmail(authEmail, {
@@ -106,11 +116,13 @@ export default function AuthPage() {
           setSuccess(
             `Un e-mail de réinitialisation a été envoyé à ${authEmail} s'il existe un compte.`
           );
+        setLoading(false);
         return;
       }
 
       if (!password || password.length < 6) {
         setError('Le mot de passe doit contenir au moins 6 caractères');
+        setLoading(false);
         return;
       }
 
@@ -118,11 +130,10 @@ export default function AuthPage() {
         const { error: err } = await signIn(login, password);
         if (err) {
           setError(mapAuthError(err, 'signin'));
+          setLoading(false);
           return;
         }
         setSuccess('Connexion réussie…');
-        // Laisse le temps à la session d'être écrite en localStorage
-        await new Promise((r) => setTimeout(r, 150));
         window.location.replace('/dashboard');
         return;
       }
@@ -130,22 +141,25 @@ export default function AuthPage() {
       // signup
       if (!fullName.trim()) {
         setError('Nom complet requis');
+        setLoading(false);
         return;
       }
       const { error: err } = await signUp(login, password, fullName.trim());
       if (err) {
         setError(mapAuthError(err, 'signup'));
+        setLoading(false);
         return;
       }
-      setSuccess("Compte créé ! Entrée dans l'application…");
-      await new Promise((r) => setTimeout(r, 150));
+      setSuccess("Compte créé ! Ouverture de l'application…");
+      // Laisse le temps d'écrire la session
+      await new Promise((r) => setTimeout(r, 250));
       window.location.replace('/dashboard');
     } catch (ex: any) {
       setError(ex?.message || 'Erreur inattendue. Réessayez.');
-    } finally {
       setLoading(false);
     }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-950 via-stone-900 to-amber-950/30 flex items-center justify-center p-4 relative overflow-hidden">
