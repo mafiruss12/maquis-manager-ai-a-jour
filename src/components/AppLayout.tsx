@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Package, ClipboardCheck, Users, Building2,
@@ -9,7 +9,6 @@ import { useAuth } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/types';
 import type { Role } from '@/lib/types';
 import { supabase } from '@/lib/supabase';
-import { useEffect, useState as useReactState } from 'react';
 import OfflineBanner from '@/components/OfflineBanner';
 import UpdateBanner from '@/components/UpdateBanner';
 import { displayLogin } from '@/lib/login';
@@ -86,9 +85,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { member, signOut, myEstablishments, activeEstablishment, switchEstablishment, refresh } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [unreadNotifs, setUnreadNotifs] = useReactState(0);
-  const [estName, setEstName] = useReactState<string | null>(null);
-  const [estLogo, setEstLogo] = useReactState<string | null>(null);
+  const [unreadNotifs, setUnreadNotifs] = useState(0);
+  const [estName, setEstName] = useState<string | null>(null);
+  const [estLogo, setEstLogo] = useState<string | null>(null);
 
   const bizType = normalizeBusinessType(activeEstablishment?.type);
   const theme = BUSINESS_THEMES[bizType];

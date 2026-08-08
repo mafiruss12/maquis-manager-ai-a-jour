@@ -36,6 +36,7 @@ interface DashboardData {
 export default function Dashboard() {
   const { member, activeEstablishment } = useAuth();
   const [data, setData] = useState<DashboardData | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const bizType: BusinessType = normalizeBusinessType(activeEstablishment?.type);
@@ -50,6 +51,7 @@ export default function Dashboard() {
         return;
       }
       setLoading(true);
+      setError(null);
       const estId = member.establishment_id;
       try {
       const today = todayISO();
@@ -105,7 +107,8 @@ export default function Dashboard() {
         });
       }
       } catch (e) {
-        console.error('Dashboard load error', e);
+        setError("Impossible de charger le tableau de bord");
+        console.error(e);
         if (!cancelled) {
           setData({
             todaySales: 0, todayExpenses: 0, todayProfit: 0, lowStockCount: 0,
@@ -151,6 +154,11 @@ export default function Dashboard() {
 
   return (
     <div>
+      {error && (
+        <div className="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-2 text-sm text-red-200 mb-3">
+          {error}
+        </div>
+      )}
       <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
         <div>
           <p className="text-xs font-medium uppercase tracking-wide" style={{ color: theme.primary }}>Mode {BUSINESS_LABELS[bizType]}</p>
