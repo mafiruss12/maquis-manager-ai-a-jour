@@ -328,20 +328,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(login: string, password: string) {
     try {
-      localStorage.removeItem('mm_login_attempts'); // reset anti-bruteforce au nouvel essai volontaire
-    } catch { /* */ }
-    if (!login.trim()) {
-      return { error: 'Saisissez votre identifiant ou e-mail.' };
-    }
-    if (!password) {
-      return { error: 'Saisissez votre mot de passe.' };
-    }
-    if (!isSafeLogin(login)) {
-      return { error: 'Identifiant invalide (e-mail ou login simple sans espaces).' };
-    }
-    const email = toAuthEmail(login);
-    setLoading(true);
-    try {
+      try {
+        localStorage.removeItem('mm_login_attempts');
+      } catch { /* */ }
+      if (!login.trim()) return { error: 'Saisissez votre identifiant ou e-mail.' };
+      if (!password) return { error: 'Saisissez votre mot de passe.' };
+      if (!isSafeLogin(login)) {
+        return { error: 'Identifiant invalide (e-mail ou login simple sans espaces).' };
+      }
+      const email = toAuthEmail(login);
+      setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         registerLoginFailure();
@@ -349,23 +345,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: safeErrorMessage(error, 'Identifiant ou mot de passe incorrect') };
       }
       registerLoginSuccess();
+      const user = data.user ?? data.session?.user ?? null;
       if (data.session) {
         setSession(data.session);
-        setUser(data.session.user);
       }
-      if (data.user) {
+      if (user) {
+        setUser(user);
         try {
-          const result = await Promise.race([
-            loadMemberData(data.user).then((m) => m),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
-          ]);
-          if (result === null) {
-            setMember(buildFallbackMember(data.user));
-            setNeedsAccess(false);
-          }
-        } catch (err) {
-          console.error('loadMember after signIn', err);
-          setMember(buildFallbackMember(data.user));
+          await loadMemberData(user);
+        } catch {
+          setMember(buildFallbackMember(user));
           setNeedsAccess(false);
         }
       }
@@ -379,8 +368,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function signUp(login: string, password: string, fullName: string) {
+    if (!login.trim()) return { error: 'E-mail ou identifiant requis.' };
     if (!isSafeLogin(login)) {
-      return { error: 'Identifiant invalide (2–40 caractères, lettres/chiffres, ou e-mail valide).' };
+      return { error: 'Identifiant invalide (e-mail ou login simple).' };
     }
     if (!password || password.length < 6) {
       return { error: 'Mot de passe trop court (minimum 6 caractères).' };
@@ -397,54 +387,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         },
       });
       if (error) {
+        setLoading(false);
         return { error: safeErrorMessage(error, error.message) };
       }
 
-      // Si pas de session (confirmation e-mail / cas edge) → connexion immédiate
       let session = data.session;
       let user = data.user;
-      if (!session) {
+      if (!session || !user) {
         const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
         if (signInErr) {
-          // Compte créé mais connexion bloquée (ex. e-mail à confirmer)
+          setLoading(false);
           return {
-            error:
-              signInErr.message.includes('Email not confirmed') || signInErr.message.includes('email')
-                ? 'Compte créé. Confirmez votre e-mail puis connectez-vous.'
-                : safeErrorMessage(signInErr, 'Compte créé. Connectez-vous avec le même identifiant.'),
+            error: signInErr.message.toLowerCase().includes('confirm')
+              ? 'Compte créé. Confirmez votre e-mail puis connectez-vous.'
+              : safeErrorMessage(signInErr, 'Compte créé. Connectez-vous avec le même identifiant.'),
           };
         }
         session = signInData.session;
         user = signInData.user;
       }
 
-      if (session) {
-        setSession(session);
-        setUser(session.user);
-      }
+      if (session) setSession(session);
       if (user) {
-        // Créer / mettre à jour le profil propriétaire
-        await supabase.from('members').upsert(
-          {
-            user_id: user.id,
-            email: user.email || email,
-            full_name: fullName || user.user_metadata?.full_name || login,
-            role: 'owner',
-            status: 'active',
-            establishment_id: null,
-          },
-          { onConflict: 'user_id' }
-        );
-        await loadMemberData(user);
+        setUser(user);
+        try {
+          await supabase.from('members').upsert(
+            {
+              user_id: user.id,
+              email: user.email || email,
+              full_name: fullName || user.user_metadata?.full_name || login,
+              role: 'owner',
+              status: 'active',
+              establishment_id: null,
+            },
+            { onConflict: 'user_id' }
+          );
+        } catch { /* trigger SQL peut déjà l'avoir créé */ }
+        try {
+          await loadMemberData(user);
+        } catch {
+          setMember(buildFallbackMember(user));
+          setNeedsAccess(false);
+        }
       }
+      setLoading(false);
       return { error: null };
     } catch (e: any) {
-      return { error: e?.message || 'Inscription impossible' };
-    } finally {
       setLoading(false);
+      return { error: e?.message || 'Inscription impossible' };
     }
   }
 

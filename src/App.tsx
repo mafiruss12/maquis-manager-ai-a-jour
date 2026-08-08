@@ -81,23 +81,9 @@ function ProtectedRoutes() {
   }
 
   if (!user) return <AuthPage />;
-  // Plus de blocage d'accès : loadMemberData crée automatiquement le membre
-  if (needsAccess) return <PendingAccessPage />;
-  if (!member) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-stone-950 gap-4 p-6 text-center">
-        <Loader2 className="animate-spin text-primary-500" size={32} />
-        <p className="text-stone-400 text-sm">Préparation de votre espace…</p>
-        <button
-          type="button"
-          className="btn-secondary text-sm"
-          onClick={() => window.location.reload()}
-        >
-          Réessayer
-        </button>
-      </div>
-    );
-  }
+  // needsAccess uniquement si vraiment bloqué (rare)
+  if (needsAccess && !member) return <PendingAccessPage />;
+  // Toujours entrer dans l'app dès qu'il y a une session (profil créé en arrière-plan)
 
   return (
     <AppLayout>

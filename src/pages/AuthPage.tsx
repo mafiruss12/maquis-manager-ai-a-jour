@@ -27,7 +27,7 @@ function mapAuthError(err: string): string {
     return 'Ce compte existe déjà. Connectez-vous ou réinitialisez le mot de passe.';
   }
   if (e.includes('password')) {
-    return 'Mot de passe trop court (minimum 8 caractères).';
+    return 'Mot de passe trop court (minimum 6 caractères).';
   }
   return err;
 }
@@ -68,64 +68,64 @@ export default function AuthPage() {
     setSuccess(null);
     setLoading(true);
     try {
-      if (!email.trim()) {
+      const login = email.trim();
+      if (!login) {
         setError('Identifiant ou e-mail requis');
-        setLoading(false);
         return;
       }
 
       if (mode === 'forgot') {
-        const authEmail = toAuthEmail(email);
+        const authEmail = toAuthEmail(login);
         if (!authEmail.includes('@') || authEmail.endsWith('@maquis.local')) {
           setError(
-            'La réinitialisation par e-mail nécessite une vraie adresse e-mail (pas un login simple type gerant1). Contactez le super admin pour réinitialiser un login local.'
+            'La réinitialisation par e-mail nécessite une vraie adresse e-mail (pas un login simple).'
           );
           return;
         }
-        const redirectTo = `${window.location.origin}/`;
-        const { error: err } = await supabase.auth.resetPasswordForEmail(authEmail, { redirectTo });
-        if (err) {
-          setError(mapAuthError(err.message));
-        } else {
+        const { error: err } = await supabase.auth.resetPasswordForEmail(authEmail, {
+          redirectTo: `${window.location.origin}/`,
+        });
+        if (err) setError(mapAuthError(err.message));
+        else
           setSuccess(
-            `Un e-mail de réinitialisation a été envoyé à ${authEmail} s’il existe un compte. Vérifiez aussi les spams.`
+            `Un e-mail de réinitialisation a été envoyé à ${authEmail} s'il existe un compte.`
           );
-        }
+        return;
+      }
+
+      if (!password || password.length < 6) {
+        setError('Le mot de passe doit contenir au moins 6 caractères');
         return;
       }
 
       if (mode === 'signin') {
-        if (password.length < 6) {
-          setError('Le mot de passe doit contenir au moins 6 caractères');
-          return;
-        }
-        const { error: err } = await signIn(email, password);
+        const { error: err } = await signIn(login, password);
         if (err) {
           setError(mapAuthError(err));
           return;
         }
-        // Succès garanti : recharger pour entrer dans l'app
-        window.location.assign('/');
+        setSuccess('Connexion réussie…');
+        // Laisse le temps à la session d'être écrite en localStorage
+        await new Promise((r) => setTimeout(r, 150));
+        window.location.href = '/dashboard';
         return;
       }
 
       // signup
-      if (password.length < 6) {
-        setError('Le mot de passe doit contenir au moins 6 caractères');
-        return;
-      }
       if (!fullName.trim()) {
         setError('Nom complet requis');
         return;
       }
-      const { error: err } = await signUp(email, password, fullName);
+      const { error: err } = await signUp(login, password, fullName.trim());
       if (err) {
         setError(mapAuthError(err));
         return;
       }
-      setSuccess('Compte créé ! Entrée dans l\'application…');
-      window.location.assign('/');
-
+      setSuccess("Compte créé ! Entrée dans l'application…");
+      await new Promise((r) => setTimeout(r, 150));
+      window.location.href = '/dashboard';
+    } catch (ex: any) {
+      setError(ex?.message || 'Erreur inattendue. Réessayez.');
     } finally {
       setLoading(false);
     }

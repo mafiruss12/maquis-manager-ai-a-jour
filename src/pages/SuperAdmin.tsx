@@ -222,17 +222,25 @@ export default function SuperAdmin() {
 
   async function deleteEstablishment(est: Establishment) {
     const count = members.filter((m) => m.establishment_id === est.id).length;
-    if (count > 0) {
-      alert(`Impossible de supprimer : ${count} membre(s) encore rattaché(s). Retirez-les d'abord.`);
-      return;
-    }
-    if (!confirm(`Supprimer l'établissement « ${est.name} » ?`)) return;
-    const { error: err } = await supabase.from('establishments').delete().eq('id', est.id);
-    if (err) setError(err.message);
-    else {
-      setEditEst(null);
-      flash('Établissement supprimé');
-      await loadData();
+    const msg =
+      count > 0
+        ? `Supprimer « ${est.name} » et détacher ${count} membre(s) ? Cette action est définitive.`
+        : `Supprimer l'établissement « ${est.name} » ?`;
+    if (!confirm(msg)) return;
+    setActionLoading(est.id);
+    try {
+      // Détacher les membres
+      await supabase.from('members').update({ establishment_id: null }).eq('establishment_id', est.id);
+      await supabase.from('member_establishments').delete().eq('establishment_id', est.id);
+      const { error: err } = await supabase.from('establishments').delete().eq('id', est.id);
+      if (err) setError(err.message);
+      else {
+        setEditEst(null);
+        flash('Établissement supprimé');
+        await loadData();
+      }
+    } finally {
+      setActionLoading(null);
     }
   }
 
@@ -401,26 +409,37 @@ export default function SuperAdmin() {
               {establishments.map((est) => {
                 const count = members.filter((m) => m.establishment_id === est.id).length;
                 return (
-                  <button
+                  <div
                     key={est.id}
-                    type="button"
-                    onClick={() => openEditEst(est)}
-                    className="card text-left hover:border-primary-500/40 transition-colors cursor-pointer"
+                    className="card text-left hover:border-primary-500/40 transition-colors"
                   >
-                    <div className="flex items-start gap-3">
-                      <div className="p-2.5 rounded-xl bg-sky-500/15">
-                        <Building2 size={20} className="text-sky-400" />
+                    <button
+                      type="button"
+                      onClick={() => openEditEst(est)}
+                      className="w-full text-left"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="p-2.5 rounded-xl bg-sky-500/15">
+                          <Building2 size={20} className="text-sky-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-stone-100">{est.name}</p>
+                          <p className="text-sm text-stone-400">{est.type || 'maquis'}</p>
+                          {est.address && <p className="text-xs text-stone-500 mt-1">{est.address}</p>}
+                          {est.phone && <p className="text-xs text-stone-500">{est.phone}</p>}
+                          <p className="text-xs text-stone-500 mt-2">{count} membre{count > 1 ? 's' : ''}</p>
+                        </div>
+                        <Pencil size={16} className="text-stone-500" />
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-stone-100">{est.name}</p>
-                        <p className="text-sm text-stone-400">{est.type || 'maquis'}</p>
-                        {est.address && <p className="text-xs text-stone-500 mt-1">{est.address}</p>}
-                        {est.phone && <p className="text-xs text-stone-500">{est.phone}</p>}
-                        <p className="text-xs text-stone-500 mt-2">{count} membre{count > 1 ? 's' : ''}</p>
-                      </div>
-                      <Pencil size={16} className="text-stone-500" />
-                    </div>
-                  </button>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteEstablishment(est)}
+                      className="mt-3 w-full text-sm text-red-400 hover:text-red-300 border border-red-500/30 rounded-xl py-2 flex items-center justify-center gap-2"
+                    >
+                      <Trash2 size={14} /> Supprimer l&apos;établissement
+                    </button>
+                  </div>
                 );
               })}
             </div>
