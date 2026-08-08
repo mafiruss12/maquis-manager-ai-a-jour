@@ -162,9 +162,7 @@ export default function AuthPage() {
       <div className="relative z-10 w-full max-w-md mt-10">
         <div className="bg-stone-900/90 backdrop-blur-xl border border-stone-700/50 rounded-3xl p-8 shadow-2xl">
           <div className="flex flex-col items-center mb-6">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-3 shadow-lg shadow-primary-500/30">
-              <Beer size={32} className="text-white" />
-            </div>
+            <img src="/logo-full.png" alt="Stock Manager AI" className="h-16 w-auto max-w-[280px] object-contain mb-3" />
             <h1 className="text-3xl font-bold font-display text-stone-100">Stock Manager AI</h1>
             <p className="text-sm text-stone-400 mt-1">
               {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion intelligente multi-métiers'}

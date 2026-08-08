@@ -295,7 +295,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             ) : (
               <Beer size={20} className="text-primary-500" />
             )}
-            <span className="font-display font-bold text-stone-100">{estName || 'Stock Manager AI'}</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <img src="/icon-192.png" alt="" className="w-8 h-8 rounded-lg object-cover shrink-0" />
+              <span className="font-display font-bold text-stone-100 truncate">{estName || 'Stock Manager AI'}</span>
+            </div>
           </div>
           <button
             onClick={handleSignOut}
