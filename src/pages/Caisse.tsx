@@ -3,6 +3,7 @@ import { Search, Plus, Minus, Trash2, ShoppingCart, CreditCard, Smartphone, Load
 import { supabase } from '@/lib/supabase';
 import { MOBILE_MONEY_PROVIDERS, MOBILE_MONEY_LABELS, type MobileMoneyProvider } from '@/lib/integrations';
 import { useAuth } from '@/lib/auth';
+import { getBusinessUI } from '@/lib/businessTypes';
 import type { Product, PaymentMethod } from '@/lib/types';
 import { Modal, EmptyState } from '@/components/ui';
 import { cacheSet, fetchWithCache, isOnline, queueAdd } from '@/lib/offline';
@@ -13,7 +14,8 @@ interface CartItem {
 }
 
 export default function Caisse() {
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const ui = getBusinessUI(activeEstablishment?.type);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -124,14 +126,14 @@ export default function Caisse() {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-3rem)] lg:h-[calc(100vh-4rem)]">
-      {/* Produits */}
+      {/* Catalogue */}
       <div className="lg:col-span-2 flex flex-col">
-        <h1 className="text-2xl font-bold font-display text-stone-100 mb-4">Caisse</h1>
+        <h1 className="text-2xl font-bold font-display text-stone-100 mb-4">{ui.posTitle}</h1>
         <div className="relative mb-4">
           <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-500" />
           <input
             type="text"
-            placeholder="Rechercher un produit..."
+            placeholder={`Rechercher ${ui.productSingular.toLowerCase()}…`}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="input-field pl-10"
@@ -139,7 +141,7 @@ export default function Caisse() {
         </div>
         <div className="flex-1 overflow-y-auto">
           {filtered.length === 0 ? (
-            <EmptyState icon={<ShoppingCart size={48} />} title="Aucun produit" message="Ajoutez des produits dans l'inventaire." />
+            <EmptyState icon={<ShoppingCart size={48} />} title={ui.productPlural} message={ui.emptyProducts} />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {filtered.map((p) => (

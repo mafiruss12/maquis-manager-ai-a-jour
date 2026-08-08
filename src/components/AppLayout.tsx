@@ -20,6 +20,8 @@ import {
   BUSINESS_LABELS,
   BUSINESS_THEMES,
   canManageEstablishments,
+  menuLabelFor,
+  getBusinessUI,
 } from '@/lib/businessTypes';
 
 interface NavSection {
@@ -231,7 +233,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     }
                   >
                     {item.icon}
-                    <span className="flex-1">{item.label}</span>
+                    <span className="flex-1">{menuLabelFor(item.to, bizType) || item.label}</span>
                     {item.to === '/notifications' && unreadNotifs > 0 && (
                       <span className="px-1.5 py-0.5 rounded-full text-xs font-bold bg-error-500 text-white">
                         {unreadNotifs}

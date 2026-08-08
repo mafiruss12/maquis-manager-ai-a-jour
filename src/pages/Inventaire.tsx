@@ -1,3 +1,4 @@
+import { getBusinessUI, normalizeBusinessType } from '@/lib/businessTypes';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -49,7 +50,8 @@ function aiStatus(stock: number, min: number): { label: string; color: 'error' |
 
 export default function Inventaire() {
   const navigate = useNavigate();
-  const { member } = useAuth();
+  const { member, activeEstablishment } = useAuth();
+  const ui = getBusinessUI(activeEstablishment?.type);
   const [products, setProducts] = useState<Product[]>([]);
   const [search, setSearch] = useState('');
   const [filterCat, setFilterCat] = useState('Tous');
@@ -283,11 +285,11 @@ export default function Inventaire() {
   .sign div { width: 30%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
   @media print { .no-print { display: none; } }
 </style></head><body>
-  <h1>Inventaire physique — Stock Manager AI</h1>
+  <h1>{ui.inventoryTitle} physique — Stock Manager AI</h1>
   <div class="meta">${dateStr} · Mode : ${mode === 'blank' ? 'Feuille manuscrite (comptage)' : 'État du stock'}</div>
   <table>
     <thead><tr>${mode === 'blank' ? headersBlank : headersStock}</tr></thead>
-    <tbody>${rows || '<tr><td colspan="9">Aucun produit</td></tr>'}</tbody>
+    <tbody>${rows || '<tr><td colspan="9">Aucun article</td></tr>'}</tbody>
   </table>
   <div class="foot">
     ${mode === 'blank'
@@ -340,20 +342,23 @@ export default function Inventaire() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold font-display text-stone-100 flex items-center gap-2">
-            <Package className="text-amber-400" size={26} /> Inventaire
+            <Package className="text-amber-400" size={26} /> {ui.inventoryTitle}
           </h1>
           <p className="text-stone-400 text-sm mt-0.5">
-            Tableau complet · calculs automatiques · alertes IA
+            {ui.inventorySubtitle} · calculs auto · alertes IA
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          {(normalizeBusinessType(activeEstablishment?.type) === 'maquis' ||
+            normalizeBusinessType(activeEstablishment?.type) === 'bar') && (
           <button
             onClick={seedCatalog}
             disabled={seeding}
             className="px-3 py-2 rounded-xl border border-stone-700 text-stone-300 text-sm hover:bg-stone-800 flex items-center gap-1.5"
           >
-            <Download size={16} /> {seeding ? 'Import…' : 'Catalogue maquis'}
+            <Download size={16} /> {seeding ? 'Import…' : 'Catalogue boissons'}
           </button>
+          )}
           <button
             type="button"
             onClick={() => printInventory('blank')}
@@ -439,7 +444,7 @@ export default function Inventaire() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={<Package size={48} />}
-          title="Aucun produit"
+          title="Aucun article"
           message="Cliquez sur « Catalogue maquis » pour importer les boissons, ou « Ajouter »."
         />
       ) : (
@@ -560,13 +565,9 @@ export default function Inventaire() {
             <div>
               <label className="label">Catégorie</label>
               <select value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="input-field">
-                <option>Alcool</option>
-                <option>Soda</option>
-                <option>Eau</option>
-                <option>Jus</option>
-                <option>Spiritueux</option>
-                <option>Vin</option>
-                <option>Autre</option>
+                {ui.categories.map((cat) => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
             <div>

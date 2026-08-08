@@ -207,6 +207,186 @@ export const RENTAL_STATUS_LABELS: Record<string, string> = {
   cancelled: 'Annulée',
 };
 
+
+/** Libellés métier cohérents par type d'établissement */
+export interface BusinessUI {
+  productSingular: string;
+  productPlural: string;
+  inventoryTitle: string;
+  inventorySubtitle: string;
+  posTitle: string;
+  posSubtitle: string;
+  stockAlert: string;
+  categories: string[];
+  unitDefault: string;
+  salesLabel: string;
+  shortcutInventory: string;
+  emptyProducts: string;
+}
+
+export const BUSINESS_UI: Record<BusinessType, BusinessUI> = {
+  maquis: {
+    productSingular: 'Boisson / article',
+    productPlural: 'Boissons & grillades',
+    inventoryTitle: 'Inventaire maquis',
+    inventorySubtitle: 'Boissons, casiers et grillades',
+    posTitle: 'Caisse maquis',
+    posSubtitle: 'Vente rapide au comptoir',
+    stockAlert: 'Boissons en rupture',
+    categories: ['Bière', 'Boisson', 'Eau', 'Vin', 'Spiritueux', 'Grillade', 'Accompagnement', 'Autre'],
+    unitDefault: 'bouteille',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Boissons',
+    emptyProducts: 'Aucune boisson en stock. Ajoutez bières, sodas, grillades…',
+  },
+  bar: {
+    productSingular: 'Boisson',
+    productPlural: 'Boissons & cocktails',
+    inventoryTitle: 'Stock bar',
+    inventorySubtitle: 'Alcools, softs et consommables',
+    posTitle: 'Caisse bar',
+    posSubtitle: 'Service au comptoir',
+    stockAlert: 'Boissons en rupture',
+    categories: ['Bière', 'Cocktail', 'Spiritueux', 'Vin', 'Soft', 'Snack', 'Autre'],
+    unitDefault: 'verre',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock bar',
+    emptyProducts: 'Aucun article bar. Ajoutez boissons et cocktails.',
+  },
+  restaurant: {
+    productSingular: 'Plat / article',
+    productPlural: 'Carte & stock',
+    inventoryTitle: 'Stock cuisine',
+    inventorySubtitle: 'Ingrédients, plats et boissons',
+    posTitle: 'Caisse restaurant',
+    posSubtitle: 'Prise de commande et encaissement',
+    stockAlert: 'Articles en rupture',
+    categories: ['Entrée', 'Plat', 'Dessert', 'Boisson', 'Menu', 'Ingrédient', 'Autre'],
+    unitDefault: 'portion',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock cuisine',
+    emptyProducts: 'Aucun article. Ajoutez plats et boissons à la carte.',
+  },
+  magasin: {
+    productSingular: 'Produit',
+    productPlural: 'Produits',
+    inventoryTitle: 'Inventaire magasin',
+    inventorySubtitle: 'Références, quantités et seuils',
+    posTitle: 'Caisse magasin',
+    posSubtitle: 'Vente au détail',
+    stockAlert: 'Produits sous seuil',
+    categories: ['Alimentaire', 'Hygiène', 'Électronique', 'Divers', 'Autre'],
+    unitDefault: 'pièce',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock',
+    emptyProducts: 'Aucun produit. Ajoutez vos références magasin.',
+  },
+  boutique: {
+    productSingular: 'Article',
+    productPlural: 'Articles',
+    inventoryTitle: 'Stock boutique',
+    inventorySubtitle: 'Collections et tailles',
+    posTitle: 'Caisse boutique',
+    posSubtitle: 'Vente d’articles',
+    stockAlert: 'Articles en rupture',
+    categories: ['Homme', 'Femme', 'Enfant', 'Accessoire', 'Autre'],
+    unitDefault: 'pièce',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Articles',
+    emptyProducts: 'Aucun article boutique.',
+  },
+  superette: {
+    productSingular: 'Produit',
+    productPlural: 'Rayons',
+    inventoryTitle: 'Inventaire supérette',
+    inventorySubtitle: 'Rayons et réassort',
+    posTitle: 'Caisse supérette',
+    posSubtitle: 'Encaissement rapide',
+    stockAlert: 'Rayons à réapprovisionner',
+    categories: ['Épicerie', 'Frais', 'Boissons', 'Hygiène', 'Autre'],
+    unitDefault: 'pièce',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Rayons',
+    emptyProducts: 'Aucun produit en rayon.',
+  },
+  pharmacie: {
+    productSingular: 'Médicament',
+    productPlural: 'Médicaments & parapharmacie',
+    inventoryTitle: 'Stock pharmacie',
+    inventorySubtitle: 'Médicaments, lots et seuils d’alerte',
+    posTitle: 'Caisse pharmacie',
+    posSubtitle: 'Délivrance et vente',
+    stockAlert: 'Médicaments sous seuil',
+    categories: ['Médicament', 'Parapharmacie', 'Matériel médical', 'Cosmétique', 'Autre'],
+    unitDefault: 'boîte',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Médicaments',
+    emptyProducts: 'Aucun médicament enregistré. Ajoutez vos références pharma.',
+  },
+  quincaillerie: {
+    productSingular: 'Article',
+    productPlural: 'Matériaux & outillage',
+    inventoryTitle: 'Stock quincaillerie',
+    inventorySubtitle: 'Matériaux, outils et consommables',
+    posTitle: 'Caisse quincaillerie',
+    posSubtitle: 'Vente matériaux et outils',
+    stockAlert: 'Articles techniques bas',
+    categories: ['Outillage', 'Quincaillerie', 'Électricité', 'Plomberie', 'Peinture', 'Autre'],
+    unitDefault: 'pièce',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Matériaux',
+    emptyProducts: 'Aucun article quincaillerie.',
+  },
+  commerce: {
+    productSingular: 'Produit',
+    productPlural: 'Produits',
+    inventoryTitle: 'Inventaire commerce',
+    inventorySubtitle: 'Stock multi-produits',
+    posTitle: 'Caisse',
+    posSubtitle: 'Vente générale',
+    stockAlert: 'Produits sous seuil',
+    categories: ['Général', 'Divers', 'Autre'],
+    unitDefault: 'pièce',
+    salesLabel: 'Ventes',
+    shortcutInventory: 'Stock',
+    emptyProducts: 'Aucun produit enregistré.',
+  },
+  location_event: {
+    productSingular: 'Matériel',
+    productPlural: 'Matériel de location',
+    inventoryTitle: 'Parc matériel',
+    inventorySubtitle: 'Chaises, tables, sono…',
+    posTitle: 'Caisse location',
+    posSubtitle: 'Encaissement location',
+    stockAlert: 'Matériel indisponible',
+    categories: ['Chaises', 'Tables', 'Chapiteaux', 'Sono', 'Décoration', 'Autre'],
+    unitDefault: 'unité',
+    salesLabel: 'Locations',
+    shortcutInventory: 'Matériel',
+    emptyProducts: 'Aucun matériel. Ajoutez le parc location.',
+  },
+};
+
+export function getBusinessUI(type: string | null | undefined): BusinessUI {
+  return BUSINESS_UI[normalizeBusinessType(type)];
+}
+
+/** Libellés de menu adaptés au métier */
+export function menuLabelFor(path: string, type: BusinessType): string | null {
+  const ui = BUSINESS_UI[type];
+  const map: Record<string, string> = {
+    '/inventory': ui.inventoryTitle,
+    '/pos': ui.posTitle,
+    '/inventory/scan': type === 'pharmacie' ? 'Scan médicaments' : type === 'location_event' ? 'Scan matériel' : 'Scan inventaire',
+    '/orders': type === 'restaurant' || type === 'bar' ? 'Commandes' : type === 'location_event' ? 'Commandes location' : 'Commandes',
+    '/kitchen': type === 'bar' ? 'Préparation bar' : type === 'restaurant' ? 'Cuisine' : 'Préparation',
+    '/tables': type === 'restaurant' || type === 'bar' ? 'Tables' : 'Espaces',
+    '/customers': type === 'location_event' ? 'Clients location' : 'Clients',
+  };
+  return map[path] ?? null;
+}
+
+
 export function normalizeBusinessType(raw: string | null | undefined): BusinessType {
   const v = (raw || '').toLowerCase().trim();
   const allowed: BusinessType[] = [

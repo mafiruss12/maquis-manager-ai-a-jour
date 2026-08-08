@@ -14,6 +14,7 @@ import {
   BUSINESS_LABELS,
   BUSINESS_THEMES,
   type BusinessType,
+  getBusinessUI,
 } from '@/lib/businessTypes';
 import type { Sale, Order } from '@/lib/types';
 
@@ -44,6 +45,7 @@ export default function Dashboard() {
 
   const bizType: BusinessType = normalizeBusinessType(activeEstablishment?.type);
   const theme = BUSINESS_THEMES[bizType];
+  const ui = getBusinessUI(bizType);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,20 +179,35 @@ export default function Dashboard() {
       { to: '/orders', label: 'Commandes', icon: Receipt },
       { to: '/kitchen', label: 'Cuisine', icon: UtensilsCrossed },
       { to: '/tables', label: 'Tables', icon: LayoutDashboard },
-      { to: '/pos', label: 'Caisse', icon: ShoppingCart },
-    ] : bizType === 'magasin' ? [
-      { to: '/pos', label: 'Vente', icon: ShoppingCart },
-      { to: '/inventory', label: 'Stock', icon: Package },
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+    ] : bizType === 'bar' ? [
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/orders', label: 'Commandes', icon: Receipt },
+      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
+      { to: '/daily-report', label: 'Clôture', icon: TrendingUp },
+    ] : bizType === 'pharmacie' ? [
+      { to: '/pos', label: 'Caisse pharmacie', icon: ShoppingCart },
+      { to: '/inventory', label: 'Médicaments', icon: Package },
+      { to: '/purchases', label: 'Approvisionnement', icon: Truck },
+      { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
+    ] : bizType === 'quincaillerie' ? [
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/inventory', label: 'Matériaux', icon: Package },
       { to: '/purchases', label: 'Achats', icon: Truck },
       { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
-    ] : bizType === 'bar' ? [
-      { to: '/pos', label: 'Caisse', icon: ShoppingCart },
-      { to: '/orders', label: 'Commandes', icon: Receipt },
-      { to: '/inventory', label: 'Stock', icon: Package },
-      { to: '/daily-report', label: 'Clôture', icon: TrendingUp },
+    ] : bizType === 'boutique' || bizType === 'superette' || bizType === 'magasin' || bizType === 'commerce' ? [
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
+      { to: '/purchases', label: 'Achats', icon: Truck },
+      { to: '/suppliers', label: 'Fournisseurs', icon: Truck },
+    ] : bizType === 'location_event' ? [
+      { to: '/rent/equipment', label: 'Matériel', icon: Package },
+      { to: '/rent/orders', label: 'Commandes', icon: Receipt },
+      { to: '/rent/calendar', label: 'Calendrier', icon: LayoutDashboard },
+      { to: '/rent/clients', label: 'Clients', icon: Users },
     ] : [
-      { to: '/pos', label: 'Caisse', icon: ShoppingCart },
-      { to: '/inventory', label: 'Boissons', icon: Package },
+      { to: '/pos', label: ui.posTitle, icon: ShoppingCart },
+      { to: '/inventory', label: ui.shortcutInventory, icon: Package },
       { to: '/expenses', label: 'Dépenses', icon: DollarSign },
       { to: '/daily-report', label: 'Clôture', icon: TrendingUp },
     ];
@@ -226,7 +243,7 @@ export default function Dashboard() {
           <StatCard title="Tables" value={`${data.occupiedTables}/${data.occupiedTables + data.freeTables}`} icon={<LayoutDashboard size={20} />} />
         )}
         {(bizType === 'maquis' || bizType === 'magasin' || bizType === 'bar') && (
-          <StatCard title="Alertes stock" value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
+          <StatCard title={ui.stockAlert} value={String(data.lowStockCount)} icon={<AlertTriangle size={20} />} />
         )}
         {bizType === 'magasin' && (
           <StatCard title="Employés" value={String(data.employeeCount)} icon={<Users size={20} />} />
