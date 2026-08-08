@@ -223,7 +223,7 @@ export default function Inventaire() {
 
 
   function printInventory(mode: 'stock' | 'blank' = 'blank') {
-    const estName = member?.establishment_id ? 'Établissement' : 'Maquis';
+    const estName = member?.establishment_id ? 'Établissement' : 'Activité';
     const dateStr = new Date().toLocaleDateString('fr-FR', {
       weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
     });
@@ -283,7 +283,7 @@ export default function Inventaire() {
   .sign div { width: 30%; border-top: 1px solid #333; padding-top: 4px; text-align: center; }
   @media print { .no-print { display: none; } }
 </style></head><body>
-  <h1>Inventaire physique — Maquis Manager</h1>
+  <h1>Inventaire physique — Stock Manager AI</h1>
   <div class="meta">${dateStr} · Mode : ${mode === 'blank' ? 'Feuille manuscrite (comptage)' : 'État du stock'}</div>
   <table>
     <thead><tr>${mode === 'blank' ? headersBlank : headersStock}</tr></thead>
@@ -292,7 +292,7 @@ export default function Inventaire() {
   <div class="foot">
     ${mode === 'blank'
       ? 'Remplissez la colonne « Comptage manuscrit », calculez l’écart, puis scannez la feuille dans l’app (Inventaire → Scanner photo IA).'
-      : 'Document généré depuis Maquis Manager — valeur au coût d’achat.'}
+      : 'Document généré depuis Stock Manager AI — valeur au coût d’achat.'}
   </div>
   <div class="sign">
     <div>Gérant</div>

@@ -5,9 +5,9 @@ import { toAuthEmail } from '@/lib/login';
 import { supabase } from '@/lib/supabase';
 
 const MARQUEE_MESSAGES = [
-  'Gérez votre maquis en temps réel',
-  'Caisse, inventaire et clôture en un clic',
-  'Fonctionne hors ligne',
+  'Stock Manager AI — gestion intelligente',
+  'Caisse, stock, IA et Mobile Money',
+  'Fonctionne hors ligne · Powered by Kevin Tech Pro',
   'Suivez vos ventes et bénéfices',
   'Clôture quotidienne sécurisée',
   'Contrôle total des accès',
@@ -165,9 +165,9 @@ export default function AuthPage() {
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center mb-3 shadow-lg shadow-primary-500/30">
               <Beer size={32} className="text-white" />
             </div>
-            <h1 className="text-3xl font-bold font-display text-stone-100">Maquis Manager</h1>
+            <h1 className="text-3xl font-bold font-display text-stone-100">Stock Manager AI</h1>
             <p className="text-sm text-stone-400 mt-1">
-              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gérez votre maquis en temps réel'}
+              {mode === 'forgot' ? 'Réinitialiser le mot de passe' : 'Gestion intelligente multi-métiers'}
             </p>
           </div>
 

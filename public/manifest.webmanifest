@@ -1,11 +1,11 @@
 {
-  "name": "Maquis Manager",
-  "short_name": "Maquis",
-  "description": "Gestion de maquis, bars et restaurants en temps réel — fonctionne aussi hors ligne",
+  "name": "Stock Manager AI",
+  "short_name": "Stock AI",
+  "description": "Plateforme SaaS africaine intelligente — stock, caisse, IA. Powered by Kevin Tech Pro.",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0c0a09",
-  "theme_color": "#0f0d0a",
+  "background_color": "#0D0D0D",
+  "theme_color": "#0D0D0D",
   "orientation": "portrait-primary",
   "lang": "fr",
   "icons": [

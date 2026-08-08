@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 :root {
-  --color-bg: #0f0d0a;
+  --color-bg: #0D0D0D;
   --color-surface: #1a1612;
   --color-border: #2a241e;
 }
@@ -19,7 +19,7 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Inter', system-ui, sans-serif;
-  background: #0f0d0a;
+  background: #0D0D0D;
   color: #f5f5f4;
   -webkit-font-smoothing: antialiased;
 }

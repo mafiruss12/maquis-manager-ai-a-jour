@@ -1,12 +1,27 @@
 import type { Role } from './types';
 
-export type BusinessType = 'maquis' | 'bar' | 'restaurant' | 'magasin' | 'location_event';
+export type BusinessType =
+  | 'maquis'
+  | 'bar'
+  | 'restaurant'
+  | 'magasin'
+  | 'boutique'
+  | 'superette'
+  | 'pharmacie'
+  | 'quincaillerie'
+  | 'commerce'
+  | 'location_event';
 
 export const BUSINESS_TYPES: BusinessType[] = [
   'maquis',
   'bar',
   'restaurant',
   'magasin',
+  'boutique',
+  'superette',
+  'pharmacie',
+  'quincaillerie',
+  'commerce',
   'location_event',
 ];
 
@@ -15,6 +30,11 @@ export const BUSINESS_LABELS: Record<BusinessType, string> = {
   bar: 'Bar',
   restaurant: 'Restaurant',
   magasin: 'Magasin',
+  boutique: 'Boutique',
+  superette: 'Supérette',
+  pharmacie: 'Pharmacie',
+  quincaillerie: 'Quincaillerie',
+  commerce: 'Commerce général',
   location_event: 'Location événementielle',
 };
 
@@ -23,8 +43,12 @@ export const BUSINESS_DESCRIPTIONS: Record<BusinessType, string> = {
   bar: 'Cocktails, service au comptoir et ambiance nocturne',
   restaurant: 'Tables, cuisine, commandes et service en salle',
   magasin: 'Stock produits, achats, marge et vente au détail',
-  location_event:
-    'Chaises, tables, bâches, sono — locations pour mariages et cérémonies',
+  boutique: 'Articles, collections et vente au détail',
+  superette: 'Épicerie, stock rapide et rayons',
+  pharmacie: 'Médicaments, lots, péremption et traçabilité',
+  quincaillerie: 'Matériaux, outillage et stock technique',
+  commerce: 'Commerce général multi-produits',
+  location_event: 'Chaises, tables, bâches, sono — mariages et cérémonies',
 };
 
 export const BUSINESS_THEMES: Record<
@@ -59,6 +83,41 @@ export const BUSINESS_THEMES: Record<
     label: 'Cyan',
     gradient: 'from-cyan-500/20 to-blue-600/5',
   },
+  boutique: {
+    primary: '#ec4899',
+    primarySoft: 'rgba(236, 72, 153, 0.15)',
+    accent: '#db2777',
+    label: 'Rose',
+    gradient: 'from-pink-500/20 to-rose-600/5',
+  },
+  superette: {
+    primary: '#84cc16',
+    primarySoft: 'rgba(132, 204, 22, 0.15)',
+    accent: '#65a30d',
+    label: 'Lime',
+    gradient: 'from-lime-500/20 to-green-600/5',
+  },
+  pharmacie: {
+    primary: '#14b8a6',
+    primarySoft: 'rgba(20, 184, 166, 0.15)',
+    accent: '#0d9488',
+    label: 'Teal',
+    gradient: 'from-teal-500/20 to-cyan-600/5',
+  },
+  quincaillerie: {
+    primary: '#f97316',
+    primarySoft: 'rgba(249, 115, 22, 0.15)',
+    accent: '#ea580c',
+    label: 'Orange',
+    gradient: 'from-orange-500/20 to-amber-600/5',
+  },
+  commerce: {
+    primary: '#64748b',
+    primarySoft: 'rgba(100, 116, 139, 0.15)',
+    accent: '#475569',
+    label: 'Slate',
+    gradient: 'from-slate-500/20 to-gray-600/5',
+  },
   location_event: {
     primary: '#6366f1',
     primarySoft: 'rgba(99, 102, 241, 0.15)',
@@ -86,7 +145,32 @@ export const MENU_BY_TYPE: Record<BusinessType, string[]> = {
     '/notifications', '/settings',
   ],
   magasin: [
-    '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
+    '/ai', '/chat', '/notifications', '/settings',
+  ],
+  boutique: [
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
+    '/ai', '/chat', '/notifications', '/settings',
+  ],
+  superette: [
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
+    '/ai', '/chat', '/notifications', '/settings',
+  ],
+  pharmacie: [
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
+    '/ai', '/chat', '/notifications', '/settings',
+  ],
+  quincaillerie: [
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
+    '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
+    '/ai', '/chat', '/notifications', '/settings',
+  ],
+  commerce: [
+  '/dashboard', '/pos', '/inventory', '/inventory/scan', '/purchases', '/suppliers', '/customers',
     '/expenses', '/employees', '/team', '/suivi', '/statistics', '/accounting', '/reports',
     '/ai', '/chat', '/notifications', '/settings',
   ],
@@ -125,8 +209,13 @@ export const RENTAL_STATUS_LABELS: Record<string, string> = {
 
 export function normalizeBusinessType(raw: string | null | undefined): BusinessType {
   const v = (raw || '').toLowerCase().trim();
-  if (v === 'maquis' || v === 'bar' || v === 'restaurant' || v === 'magasin' || v === 'location_event') return v;
+  const allowed: BusinessType[] = [
+    'maquis', 'bar', 'restaurant', 'magasin', 'boutique', 'superette',
+    'pharmacie', 'quincaillerie', 'commerce', 'location_event',
+  ];
+  if ((allowed as string[]).includes(v)) return v as BusinessType;
   if (v === 'store' || v === 'shop') return 'magasin';
+  if (v === 'superette' || v === 'supermarche') return 'superette';
   if (v === 'location' || v === 'event' || v === 'rental') return 'location_event';
   return 'maquis';
 }

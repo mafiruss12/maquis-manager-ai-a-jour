@@ -195,7 +195,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
           <div className="min-w-0">
             <p className="font-bold font-display text-stone-100 text-sm truncate">
-              {estName || 'Maquis Manager'}
+              {estName || 'Stock Manager AI'}
             </p>
             <p className="text-xs text-stone-500 truncate">{member ? ROLE_LABELS[member.role] : ''}</p>
           </div>
@@ -295,7 +295,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             ) : (
               <Beer size={20} className="text-primary-500" />
             )}
-            <span className="font-display font-bold text-stone-100">{estName || 'Maquis Manager'}</span>
+            <span className="font-display font-bold text-stone-100">{estName || 'Stock Manager AI'}</span>
           </div>
           <button
             onClick={handleSignOut}
@@ -309,6 +309,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         <main className="flex-1 p-4 lg:p-8 pb-24">{children}</main>
         <UpdateBanner />
+      <footer className="px-4 py-3 text-center text-[11px] text-stone-500 border-t border-stone-800/80">
+        <span className="text-stone-400 font-medium">Stock Manager AI</span>
+        {' · '}
+        <span>Powered by <span className="text-amber-500/90">Kevin Tech Pro</span></span>
+      </footer>
       <OfflineBanner />
       </div>
 

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.maquismanager.app',
-  appName: 'Maquis Manager',
+  appName: 'Stock Manager AI',
   webDir: 'dist',
   server: {
     // APK charge toujours le site live (nouvelle adresse)

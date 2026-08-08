@@ -100,7 +100,7 @@ export default function AIAssistant() {
     {
       id: 'welcome',
       role: 'assistant',
-      text: 'Bonjour ! Je suis l’assistant Maquis. Posez vos questions sur la caisse, le stock, les dépenses, la clôture, le personnel, etc.',
+      text: 'Bonjour ! Je suis Stock AI Assistant (Kevin Tech Pro). Posez vos questions sur la caisse, le stock, les prévisions, les dépenses, la clôture, le personnel…',
     },
   ]);
   const [input, setInput] = useState('');
@@ -278,7 +278,7 @@ export default function AIAssistant() {
     <div>
       <div className="flex items-center gap-2 mb-2">
         <Sparkles className="text-primary-400" />
-        <h1 className="text-2xl font-bold font-display text-stone-100">Assistant IA</h1>
+        <h1 className="text-2xl font-bold font-display text-stone-100">Stock AI Assistant</h1>
       </div>
       <p className="text-stone-400 text-sm mb-6">
         Analyses automatiques + aide pour toutes les tâches du personnel

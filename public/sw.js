@@ -1,4 +1,4 @@
-/* Maquis Manager — Service Worker offline-first */
+/* Stock Manager AI — Service Worker offline-first */
 const CACHE_NAME = 'maquis-shell-v3';
 const PRECACHE = ['/', '/index.html', '/manifest.webmanifest', '/icon-192.png', '/icon-512.png'];
 
