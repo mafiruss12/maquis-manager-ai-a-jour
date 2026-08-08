@@ -170,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       if (existingMember && !existingMember.establishment_id) {
         try {
+          let estId: string | null = null;
           const { data: owned } = await supabase
             .from('establishments')
             .select('id')
@@ -177,10 +178,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             .order('created_at', { ascending: true })
             .limit(1)
             .maybeSingle();
-          if (owned?.id) {
+          if (owned?.id) estId = owned.id;
+          if (!estId) {
+            const { data: link } = await supabase
+              .from('member_establishments')
+              .select('establishment_id')
+              .eq('user_id', currentUser.id)
+              .eq('status', 'active')
+              .limit(1)
+              .maybeSingle();
+            if (link?.establishment_id) estId = link.establishment_id;
+          }
+          if (estId) {
             await supabase
               .from('members')
-              .update({ establishment_id: owned.id })
+              .update({ establishment_id: estId })
               .eq('user_id', currentUser.id);
             const { data: refreshed } = await supabase
               .from('members')
@@ -188,6 +200,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               .eq('user_id', currentUser.id)
               .maybeSingle();
             if (refreshed) existingMember = refreshed as Member;
+            else existingMember = { ...existingMember, establishment_id: estId };
           }
         } catch {
           /* ignore */
@@ -211,44 +224,92 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return existingMember;
       }
 
-      const payload = {
+      // Récupérer un établissement existant (créé par l'user ou via member_establishments)
+      let recoveredEstId: string | null = null;
+      try {
+        const { data: owned } = await supabase
+          .from('establishments')
+          .select('id')
+          .eq('created_by', currentUser.id)
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        if (owned?.id) recoveredEstId = owned.id;
+      } catch { /* */ }
+      if (!recoveredEstId) {
+        try {
+          const { data: link } = await supabase
+            .from('member_establishments')
+            .select('establishment_id')
+            .eq('user_id', currentUser.id)
+            .eq('status', 'active')
+            .limit(1)
+            .maybeSingle();
+          if (link?.establishment_id) recoveredEstId = link.establishment_id;
+        } catch { /* */ }
+      }
+
+      const payload: Record<string, unknown> = {
         user_id: currentUser.id,
         email: fallback.email,
         full_name: fallback.full_name,
-        role: 'owner' as const,
-        status: 'active' as const,
-        establishment_id: null as string | null,
+        role: 'owner',
+        status: 'active',
       };
+      if (recoveredEstId) payload.establishment_id = recoveredEstId;
 
       try {
-        const { data, error } = await supabase
+        // insert only if absent — ne pas écraser un establishment_id existant avec null
+        const { data: inserted, error: insErr } = await supabase
           .from('members')
-          .upsert(payload, { onConflict: 'user_id' })
+          .insert(payload)
           .select()
           .maybeSingle();
-        if (error) console.error('member upsert error', error);
-        if (data) {
-          const m = data as Member;
+        if (!insErr && inserted) {
+          const m = inserted as Member;
           setMember(m);
           setAccessRequest(null);
           setNeedsAccess(false);
-          try {
-            await loadMyEstablishments(currentUser, m);
-          } catch {
-            /* */
-          }
+          try { await loadMyEstablishments(currentUser, m); } catch { /* */ }
           return m;
         }
+        // Si conflit (déjà existant) : recharger sans upsert destructif
+        const { data: again } = await supabase
+          .from('members')
+          .select('*')
+          .eq('user_id', currentUser.id)
+          .maybeSingle();
+        if (again) {
+          let m = again as Member;
+          if (!m.establishment_id && recoveredEstId) {
+            await supabase.from('members').update({ establishment_id: recoveredEstId }).eq('user_id', currentUser.id);
+            m = { ...m, establishment_id: recoveredEstId };
+          }
+          setMember(m);
+          setAccessRequest(null);
+          setNeedsAccess(false);
+          try { await loadMyEstablishments(currentUser, m); } catch { /* */ }
+          return m;
+        }
+        if (insErr) console.error('member insert error', insErr);
       } catch (e) {
-        console.error('member upsert throw', e);
+        console.error('member insert throw', e);
       }
 
-      setMember(fallback);
+      // Dernier recours : fallback AVEC établissement récupéré si possible
+      const fb = recoveredEstId
+        ? { ...fallback, establishment_id: recoveredEstId }
+        : fallback;
+      setMember(fb);
       setAccessRequest(null);
       setNeedsAccess(false);
-      setMyEstablishments([]);
-      setActiveEstablishment(null);
-      return fallback;
+      if (recoveredEstId) {
+        try { await loadMyEstablishments(currentUser, fb); } catch { /* */ }
+      } else {
+        setMyEstablishments([]);
+        setActiveEstablishment(null);
+      }
+      return fb;
     } catch (e) {
       console.error('loadMemberData', e);
       setMember(fallback);

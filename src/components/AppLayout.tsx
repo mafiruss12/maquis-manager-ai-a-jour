@@ -151,8 +151,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     }),
   })).filter((section) => section.items.length > 0);
 
-  // Tout membre sans établissement peut créer le sien (plus de blocage "en attente")
-  if (member && !member.establishment_id) {
+  // Création d'activité UNIQUEMENT si vraiment aucun établissement
+  // (ni sur le membre, ni dans myEstablishments — évite de redemander aux comptes existants)
+  const hasEstablishment = Boolean(
+    member?.establishment_id ||
+    activeEstablishment?.id ||
+    (myEstablishments && myEstablishments.length > 0)
+  );
+
+  if (member && !hasEstablishment) {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100">
         <TypePicker mode="create" onDone={() => refresh()} />
@@ -160,12 +167,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     );
   }
 
+  // Type inconnu seulement si vraiment hors liste (pas les nouveaux métiers)
+  const knownTypes = new Set([
+    'maquis', 'bar', 'restaurant', 'magasin', 'boutique', 'superette',
+    'pharmacie', 'quincaillerie', 'commerce', 'location_event',
+  ]);
+  const rawType = (activeEstablishment?.type || '').toLowerCase().trim();
   if (
     member?.establishment_id &&
     activeEstablishment &&
-    !['maquis', 'bar', 'restaurant', 'magasin', 'location_event'].includes(
-      (activeEstablishment.type || '').toLowerCase()
-    )
+    rawType &&
+    !knownTypes.has(rawType)
   ) {
     return (
       <div className="min-h-screen bg-stone-950 text-stone-100">
